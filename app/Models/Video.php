@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\VideoStatus;
+use Database\Factories\VideoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -21,12 +23,15 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'mime_type',
     'size',
     'duration_seconds',
+    'width',
+    'height',
     'thumbnail_path',
 ])]
 class Video extends Model
 {
-    /** @use HasFactory<\Database\Factories\VideoFactory> */
+    /** @use HasFactory<VideoFactory> */
     use HasFactory;
+
     use SoftDeletes;
 
     /**
@@ -35,8 +40,11 @@ class Video extends Model
     protected function casts(): array
     {
         return [
+            'status' => VideoStatus::class,
             'size' => 'integer',
             'duration_seconds' => 'integer',
+            'width' => 'integer',
+            'height' => 'integer',
         ];
     }
 

@@ -47,9 +47,9 @@ export default function Register() {
                     <CardDescription>Enter your details to get started.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
                         {errors.length > 0 && (
-                            <Alert variant="destructive">
+                            <Alert variant="destructive" onDismiss={() => setErrors([])}>
                                 <AlertDescription>
                                     <ul className="list-disc space-y-1 pl-4">
                                         {errors.map((message) => (
@@ -61,7 +61,7 @@ export default function Register() {
                         )}
                         <div className="flex flex-col gap-1.5">
                             <Label htmlFor="name">Name</Label>
-                            <Input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} required />
+                            <Input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} />
                         </div>
                         <div className="flex flex-col gap-1.5">
                             <Label htmlFor="email">Email</Label>
@@ -70,7 +70,6 @@ export default function Register() {
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                required
                             />
                         </div>
                         <div className="flex flex-col gap-1.5">
@@ -80,7 +79,6 @@ export default function Register() {
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                required
                             />
                         </div>
                         <div className="flex flex-col gap-1.5">
@@ -90,7 +88,6 @@ export default function Register() {
                                 type="password"
                                 value={passwordConfirmation}
                                 onChange={(e) => setPasswordConfirmation(e.target.value)}
-                                required
                             />
                         </div>
                         <Button type="submit" disabled={submitting} className="mt-2 self-center">

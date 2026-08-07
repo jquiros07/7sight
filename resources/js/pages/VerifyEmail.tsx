@@ -58,7 +58,7 @@ export default function VerifyEmail() {
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
                     {errors.length > 0 && (
-                        <Alert variant="destructive">
+                        <Alert variant="destructive" onDismiss={() => setErrors([])}>
                             <AlertDescription>
                                 <ul className="list-disc space-y-1 pl-4">
                                     {errors.map((message) => (

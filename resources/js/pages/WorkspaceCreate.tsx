@@ -24,7 +24,7 @@ export default function WorkspaceCreate() {
         setSubmitting(true);
         try {
             await api.post('/api/workspaces', { name, description: description || null });
-            navigate('/workspaces');
+            navigate('/workspaces', { state: { message: 'Workspace created.' } });
         } catch (err) {
             setFormErrors(getErrorMessages(err));
         } finally {
@@ -42,9 +42,9 @@ export default function WorkspaceCreate() {
                     <CardDescription>Give it a name and an optional description.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
                         {formErrors.length > 0 && (
-                            <Alert variant="destructive">
+                            <Alert variant="destructive" onDismiss={() => setFormErrors([])}>
                                 <AlertDescription>
                                     <ul className="list-disc space-y-1 pl-4">
                                         {formErrors.map((message) => (
@@ -56,7 +56,7 @@ export default function WorkspaceCreate() {
                         )}
                         <div className="flex flex-col gap-1.5">
                             <Label htmlFor="ws-name">Name</Label>
-                            <Input id="ws-name" value={name} onChange={(e) => setName(e.target.value)} required />
+                            <Input id="ws-name" value={name} onChange={(e) => setName(e.target.value)} />
                         </div>
                         <div className="flex flex-col gap-1.5">
                             <Label htmlFor="ws-description">Description</Label>

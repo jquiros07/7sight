@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\VideoController;
 use App\Http\Controllers\WorkspaceController;
 use App\Models\Video;
 use Illuminate\Http\Request;
@@ -20,4 +21,5 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::apiResource('workspaces', WorkspaceController::class);
+    Route::apiResource('videos', VideoController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
 });

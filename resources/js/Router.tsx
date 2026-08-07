@@ -7,6 +7,7 @@ import Login from './pages/Login';
 import Profile from './pages/Profile';
 import Register from './pages/Register';
 import VerifyEmail from './pages/VerifyEmail';
+import VideoEdit from './pages/VideoEdit';
 import VideoUpload from './pages/VideoUpload';
 import Videos from './pages/Videos';
 import WorkspaceCreate from './pages/WorkspaceCreate';
@@ -54,6 +55,14 @@ export default function Router() {
                 element={
                     <RequireAuth>
                         <VideoUpload />
+                    </RequireAuth>
+                }
+            />
+            <Route
+                path="/videos/:id/edit"
+                element={
+                    <RequireAuth>
+                        <VideoEdit />
                     </RequireAuth>
                 }
             />

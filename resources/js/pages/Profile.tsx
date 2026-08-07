@@ -80,9 +80,9 @@ export default function Profile() {
                         <CardDescription>Update your name and email address.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handleProfileSubmit} className="flex flex-col gap-4">
+                        <form onSubmit={handleProfileSubmit} noValidate className="flex flex-col gap-4">
                             {profileErrors.length > 0 && (
-                                <Alert variant="destructive">
+                                <Alert variant="destructive" onDismiss={() => setProfileErrors([])}>
                                     <AlertDescription>
                                         <ul className="list-disc space-y-1 pl-4">
                                             {profileErrors.map((message) => (
@@ -92,10 +92,14 @@ export default function Profile() {
                                     </AlertDescription>
                                 </Alert>
                             )}
-                            {profileStatus && <p className="text-sm text-muted-foreground-1">{profileStatus}</p>}
+                            {profileStatus && (
+                                <Alert variant="success" onDismiss={() => setProfileStatus(null)}>
+                                    <AlertDescription>{profileStatus}</AlertDescription>
+                                </Alert>
+                            )}
                             <div className="flex flex-col gap-1.5">
                                 <Label htmlFor="profile-name">Name</Label>
-                                <Input id="profile-name" value={name} onChange={(e) => setName(e.target.value)} required />
+                                <Input id="profile-name" value={name} onChange={(e) => setName(e.target.value)} />
                             </div>
                             <div className="flex flex-col gap-1.5">
                                 <Label htmlFor="profile-email">Email</Label>
@@ -104,7 +108,6 @@ export default function Profile() {
                                     type="email"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    required
                                 />
                             </div>
                             <Button type="submit" disabled={savingProfile} className="self-center">
@@ -125,9 +128,9 @@ export default function Profile() {
                         <CardDescription>Update your account password.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-4">
+                        <form onSubmit={handlePasswordSubmit} noValidate className="flex flex-col gap-4">
                             {passwordErrors.length > 0 && (
-                                <Alert variant="destructive">
+                                <Alert variant="destructive" onDismiss={() => setPasswordErrors([])}>
                                     <AlertDescription>
                                         <ul className="list-disc space-y-1 pl-4">
                                             {passwordErrors.map((message) => (
@@ -137,7 +140,11 @@ export default function Profile() {
                                     </AlertDescription>
                                 </Alert>
                             )}
-                            {passwordStatus && <p className="text-sm text-muted-foreground-1">{passwordStatus}</p>}
+                            {passwordStatus && (
+                                <Alert variant="success" onDismiss={() => setPasswordStatus(null)}>
+                                    <AlertDescription>{passwordStatus}</AlertDescription>
+                                </Alert>
+                            )}
                             <div className="flex flex-col gap-1.5">
                                 <Label htmlFor="current-password">Current password</Label>
                                 <Input
@@ -145,7 +152,6 @@ export default function Profile() {
                                     type="password"
                                     value={currentPassword}
                                     onChange={(e) => setCurrentPassword(e.target.value)}
-                                    required
                                 />
                             </div>
                             <div className="flex flex-col gap-1.5">
@@ -155,7 +161,6 @@ export default function Profile() {
                                     type="password"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    required
                                 />
                             </div>
                             <div className="flex flex-col gap-1.5">
@@ -165,7 +170,6 @@ export default function Profile() {
                                     type="password"
                                     value={passwordConfirmation}
                                     onChange={(e) => setPasswordConfirmation(e.target.value)}
-                                    required
                                 />
                             </div>
                             <Button type="submit" disabled={savingPassword} className="self-center">

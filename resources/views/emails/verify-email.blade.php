@@ -16,7 +16,7 @@
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px; background-color:#ffffff; border:1px solid #e4e4e7; border-radius:12px; overflow:hidden;">
                     <tr>
                         <td align="center" style="padding:32px 32px 0 32px;">
-                            <img src="{{ $message->embed(resource_path('images/vip.png')) }}" width="56" height="56" alt="Video Intelligence Platform" style="display:block;">
+                            <img src="{{ $message->embed(resource_path('images/7sight.png')) }}" width="56" height="56" alt="7Sight" style="display:block;">
                         </td>
                     </tr>
                     <tr>

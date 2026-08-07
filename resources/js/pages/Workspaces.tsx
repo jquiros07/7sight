@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { HSOverlay } from 'preline';
@@ -64,15 +64,26 @@ function SortButton({
 
 export default function Workspaces() {
     const navigate = useNavigate();
+    const location = useLocation();
     const [workspaces, setWorkspaces] = useState<PaginatedWorkspaces | null>(null);
     const [page, setPage] = useState(1);
     const [sort, setSort] = useState<SortField>('created_at');
     const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
     const [loading, setLoading] = useState(true);
     const [listError, setListError] = useState<string[]>([]);
+    const [statusMessage, setStatusMessage] = useState<string | null>(
+        (location.state as { message?: string } | null)?.message ?? null,
+    );
 
     const [deleteTarget, setDeleteTarget] = useState<Workspace | null>(null);
     const [deleting, setDeleting] = useState(false);
+
+    useEffect(() => {
+        if (location.state) {
+            navigate(location.pathname, { replace: true, state: null });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     function load() {
         setLoading(true);
@@ -111,8 +122,11 @@ export default function Workspaces() {
         try {
             await api.delete(`/api/workspaces/${deleteTarget.id}`);
             HSOverlay.close('#confirm-delete-workspace');
+            setStatusMessage('Workspace deleted.');
+            setListError([]);
             load();
         } catch (err) {
+            setStatusMessage(null);
             setListError(getErrorMessages(err));
         } finally {
             setDeleting(false);
@@ -129,8 +143,14 @@ export default function Workspaces() {
                 </Button>
             </div>
 
+            {statusMessage && listError.length === 0 && (
+                <Alert variant="success" className="mt-4" onDismiss={() => setStatusMessage(null)}>
+                    <AlertDescription>{statusMessage}</AlertDescription>
+                </Alert>
+            )}
+
             {listError.length > 0 && (
-                <Alert variant="destructive" className="mt-4">
+                <Alert variant="destructive" className="mt-4" onDismiss={() => setListError([])}>
                     <AlertDescription>
                         <ul className="list-disc space-y-1 pl-4">
                             {listError.map((message) => (

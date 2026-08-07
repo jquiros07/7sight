@@ -45,9 +45,9 @@ export default function Login() {
                     <CardDescription>Enter your credentials to access your account.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
                         {errors.length > 0 && (
-                            <Alert variant="destructive">
+                            <Alert variant="destructive" onDismiss={() => setErrors([])}>
                                 <AlertDescription>
                                     <ul className="list-disc space-y-1 pl-4">
                                         {errors.map((message) => (
@@ -64,7 +64,6 @@ export default function Login() {
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                required
                             />
                         </div>
                         <div className="flex flex-col gap-1.5">
@@ -74,7 +73,6 @@ export default function Login() {
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                required
                             />
                         </div>
                         <Button type="submit" disabled={submitting} className="mt-2 self-center">

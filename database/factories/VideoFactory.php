@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\VideoStatus;
 use App\Models\User;
 use App\Models\Video;
 use App\Models\Workspace;
@@ -27,13 +28,15 @@ class VideoFactory extends Factory
             'user_id' => User::factory(),
             'title' => fake()->sentence(4),
             'description' => fake()->optional()->paragraph(),
-            'status' => fake()->randomElement(['uploaded', 'processing', 'ready', 'failed']),
+            'status' => fake()->randomElement(VideoStatus::cases()),
             'disk' => 'local',
             'path' => 'videos/'.$filename,
             'original_filename' => $filename,
             'mime_type' => 'video/mp4',
             'size' => fake()->numberBetween(1_000_000, 500_000_000),
             'duration_seconds' => fake()->numberBetween(5, 3600),
+            'width' => 1920,
+            'height' => 1080,
             'thumbnail_path' => null,
         ];
     }

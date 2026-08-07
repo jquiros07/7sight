@@ -9,18 +9,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
-type Workspace = {
+type Video = {
     id: number;
-    name: string;
+    title: string;
     description: string | null;
 };
 
-export default function WorkspaceEdit() {
+export default function VideoEdit() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
 
-    const [name, setName] = useState('');
+    const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string[]>([]);
@@ -28,9 +29,9 @@ export default function WorkspaceEdit() {
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
-        api.get<Workspace>(`/api/workspaces/${id}`)
+        api.get<Video>(`/api/videos/${id}`)
             .then((res) => {
-                setName(res.data.name);
+                setTitle(res.data.title);
                 setDescription(res.data.description ?? '');
             })
             .catch((err) => setLoadError(getErrorMessages(err)))
@@ -42,8 +43,8 @@ export default function WorkspaceEdit() {
         setFormErrors([]);
         setSubmitting(true);
         try {
-            await api.patch(`/api/workspaces/${id}`, { name, description: description || null });
-            navigate('/workspaces', { state: { message: 'Workspace updated.' } });
+            await api.patch(`/api/videos/${id}`, { title, description: description || null });
+            navigate('/videos', { state: { message: 'Video updated.' } });
         } catch (err) {
             setFormErrors(getErrorMessages(err));
         } finally {
@@ -52,13 +53,13 @@ export default function WorkspaceEdit() {
     }
 
     return (
-        <AppLayout active="workspaces">
-            <h1 className="font-heading text-2xl font-medium">Edit workspace</h1>
+        <AppLayout active="videos">
+            <h1 className="font-heading text-2xl font-medium">Edit video</h1>
 
             <Card className="mt-6 max-w-md">
                 <CardHeader>
-                    <CardTitle>Workspace details</CardTitle>
-                    <CardDescription>Update the name and description.</CardDescription>
+                    <CardTitle>Video details</CardTitle>
+                    <CardDescription>Update the title and description.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loadError.length > 0 && (
@@ -89,15 +90,16 @@ export default function WorkspaceEdit() {
                                     </Alert>
                                 )}
                                 <div className="flex flex-col gap-1.5">
-                                    <Label htmlFor="ws-edit-name">Name</Label>
-                                    <Input id="ws-edit-name" value={name} onChange={(e) => setName(e.target.value)} />
+                                    <Label htmlFor="video-edit-title">Title</Label>
+                                    <Input id="video-edit-title" value={title} onChange={(e) => setTitle(e.target.value)} />
                                 </div>
                                 <div className="flex flex-col gap-1.5">
-                                    <Label htmlFor="ws-edit-description">Description</Label>
-                                    <Input
-                                        id="ws-edit-description"
+                                    <Label htmlFor="video-edit-description">Description</Label>
+                                    <Textarea
+                                        id="video-edit-description"
                                         value={description}
                                         onChange={(e) => setDescription(e.target.value)}
+                                        rows={3}
                                     />
                                 </div>
                                 <div className="flex justify-center gap-2">
@@ -109,7 +111,7 @@ export default function WorkspaceEdit() {
                                             </>
                                         )}
                                     </Button>
-                                    <Button type="button" variant="secondary" onClick={() => navigate('/workspaces')}>
+                                    <Button type="button" variant="secondary" onClick={() => navigate('/videos')}>
                                         Cancel
                                     </Button>
                                 </div>
