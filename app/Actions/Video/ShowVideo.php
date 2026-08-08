@@ -17,6 +17,6 @@ class ShowVideo
     {
         $this->authorizeMembership($user, $video->workspace);
 
-        return $video;
+        return $video->load('analysisJobs');
     }
 }

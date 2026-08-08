@@ -2,16 +2,28 @@
 
 namespace App\Models;
 
+use App\Enums\AnalysisType;
+use Database\Factories\AnalysisJobFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['video_id', 'type', 'status', 'error_message', 'raw_output_path', 'started_at', 'completed_at'])]
+#[Fillable([
+    'video_id',
+    'type',
+    'status',
+    'attempts',
+    'external_job_id',
+    'error_message',
+    'raw_output_path',
+    'started_at',
+    'completed_at',
+])]
 class AnalysisJob extends Model
 {
-    /** @use HasFactory<\Database\Factories\AnalysisJobFactory> */
+    /** @use HasFactory<AnalysisJobFactory> */
     use HasFactory;
 
     /**
@@ -20,6 +32,8 @@ class AnalysisJob extends Model
     protected function casts(): array
     {
         return [
+            'type' => AnalysisType::class,
+            'attempts' => 'integer',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
         ];

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ObjectDetectionCategoryController;
 use App\Http\Controllers\VideoController;
 use App\Http\Controllers\WorkspaceController;
 use App\Models\Video;
@@ -22,4 +23,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('workspaces', WorkspaceController::class);
     Route::apiResource('videos', VideoController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
+    Route::post('/videos/{video}/analyze', [VideoController::class, 'analyze']);
+    Route::get('/object-detection-categories', [ObjectDetectionCategoryController::class, 'index']);
 });

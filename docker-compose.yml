@@ -10,7 +10,7 @@ x-app: &app
     DB_PORT: 3306
     DB_DATABASE: video_intelligence_platform
     DB_USERNAME: laravel
-    DB_PASSWORD: secret
+    DB_PASSWORD: ${MYSQL_PASSWORD:-secret}
     REDIS_HOST: redis
     REDIS_PORT: 6379
     XDEBUG_MODE: ${XDEBUG_MODE:-debug,develop}
@@ -19,17 +19,55 @@ x-app: &app
       condition: service_healthy
     redis:
       condition: service_started
+  restart: unless-stopped
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
 
 services:
   app:
-    <<: *app
+    <<: [*app, *logging]
     ports:
       - "8000:80"
 
-  worker:
-    <<: *app
-    command: php artisan queue:listen --tries=1
+  analysis-worker:
+    build:
+      context: ./analysis-worker
+    deploy:
+      replicas: 5
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: video_intelligence_platform
+      DB_USERNAME: laravel
+      DB_PASSWORD: ${MYSQL_PASSWORD:-secret}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      AWS_BUCKET: ${AWS_BUCKET}
+      ANALYSIS_PROVIDER: ${ANALYSIS_PROVIDER:-rekognition}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    volumes:
+      - ./storage/app/private:/videos
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    <<: *logging
 
+  # Dev-only: local Vite dev server for HMR. Not needed in production — the
+  # `production` Dockerfile target already builds and bakes in public/build,
+  # which nginx (inside the app container) serves directly with no running
+  # frontend process. Active by default locally via COMPOSE_PROFILES=dev in
+  # .env; a production .env should leave that unset so this never starts.
   vite:
     image: node:22-bookworm
     working_dir: /var/www/html
@@ -39,28 +77,36 @@ services:
     command: sh -c "npm install && npm run dev -- --host"
     ports:
       - "5173:5173"
+    profiles: ["dev"]
+    restart: unless-stopped
+    <<: *logging
 
   mysql:
     image: mysql:8.4
     environment:
       MYSQL_DATABASE: video_intelligence_platform
       MYSQL_USER: laravel
-      MYSQL_PASSWORD: secret
-      MYSQL_ROOT_PASSWORD: root_secret
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-secret}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_secret}
     ports:
       - "3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_secret"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root_secret}"]
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
+    <<: *logging
 
   redis:
     image: redis:7-alpine
+    command: redis-server --maxmemory-policy noeviction --appendonly yes
     volumes:
       - redis-data:/data
+    restart: unless-stopped
+    <<: *logging
 
 volumes:
   vendor:

@@ -55,6 +55,9 @@ RUN npm run build
 # ---------------------------------------------------------------------------
 FROM base AS production
 
+COPY docker/opcache.ini /usr/local/etc/php/conf.d/opcache.ini
+COPY docker/fpm-pool.conf /usr/local/etc/php-fpm.d/zz-pool-overrides.conf
+
 COPY composer.json composer.lock ./
 RUN composer install --no-interaction --no-scripts --no-autoloader --no-dev --optimize-autoloader
 

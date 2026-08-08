@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\AnalysisType;
 use App\Models\AnalysisJob;
 use App\Models\Video;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -20,8 +21,10 @@ class AnalysisJobFactory extends Factory
     {
         return [
             'video_id' => Video::factory(),
-            'type' => fake()->randomElement(['transcription', 'object_detection', 'content_moderation']),
+            'type' => fake()->randomElement([AnalysisType::ObjectDetection, AnalysisType::ContentModeration]),
             'status' => fake()->randomElement(['pending', 'processing', 'completed', 'failed']),
+            'attempts' => 0,
+            'external_job_id' => null,
             'error_message' => null,
             'raw_output_path' => null,
             'started_at' => null,

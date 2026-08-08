@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
-import { Loader2, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { Eye, Loader2, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { HSOverlay } from 'preline';
 import { api } from '../lib/api';
 import { getErrorMessages } from '../lib/errors';
 import { cn } from '../lib/utils';
+import { ActionButton } from '@/components/ui/action-button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -124,8 +125,8 @@ export default function Videos() {
         (location.state as { message?: string } | null)?.message ?? null,
     );
 
-    const [queuedIds, setQueuedIds] = useState<number[]>([]);
-    const [showAnalyzeNote, setShowAnalyzeNote] = useState(false);
+    const [analyzingIds, setAnalyzingIds] = useState<number[]>([]);
+    const [stubNote, setStubNote] = useState<string | null>(null);
 
     const [deleteTarget, setDeleteTarget] = useState<Video | null>(null);
     const [deleting, setDeleting] = useState(false);
@@ -153,6 +154,24 @@ export default function Videos() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [page, sort, direction]);
 
+    // Rows (and their tooltips) render after `videos` loads, which is after
+    // Router's pathname-based autoInit() already ran. Re-init once they exist.
+    useEffect(() => {
+        if (videos) {
+            window.HSStaticMethods.autoInit();
+        }
+    }, [videos]);
+
+    const hasProcessing = videos?.data.some((video) => video.status === 'processing') ?? false;
+
+    // Poll while anything is analyzing so status badges update without a manual refresh.
+    useEffect(() => {
+        if (!hasProcessing) return;
+        const interval = setInterval(load, 5000);
+        return () => clearInterval(interval);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hasProcessing]);
+
     function handleSort(field: SortField) {
         if (field === sort) {
             setDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -163,10 +182,22 @@ export default function Videos() {
         setPage(1);
     }
 
-    function handleAnalyze(id: number) {
-        // UI only for now — wire this up to the analysis pipeline once it exists.
-        setQueuedIds((current) => [...current, id]);
-        setShowAnalyzeNote(true);
+    async function handleAnalyze(id: number) {
+        setAnalyzingIds((current) => [...current, id]);
+        setListError([]);
+        try {
+            await api.post(`/api/videos/${id}/analyze`);
+            load();
+        } catch (err) {
+            setListError(getErrorMessages(err));
+        } finally {
+            setAnalyzingIds((current) => current.filter((analyzingId) => analyzingId !== id));
+        }
+    }
+
+    function handleViewResults() {
+        // UI only for now — wire this up once a results view/endpoint exists.
+        setStubNote("Results view isn't available yet — this isn't wired up to the analysis pipeline yet.");
     }
 
     function openDeleteDialog(video: Video) {
@@ -201,9 +232,9 @@ export default function Videos() {
                 </Button>
             </div>
 
-            {showAnalyzeNote && (
-                <Alert className="mt-4" onDismiss={() => setShowAnalyzeNote(false)}>
-                    <AlertDescription>Queued for analysis — this isn't wired up to the analysis pipeline yet.</AlertDescription>
+            {stubNote && (
+                <Alert className="mt-4" onDismiss={() => setStubNote(null)}>
+                    <AlertDescription>{stubNote}</AlertDescription>
                 </Alert>
             )}
 
@@ -260,7 +291,7 @@ export default function Videos() {
                             )}
                             {!loading &&
                                 videos?.data.map((video) => {
-                                    const queued = queuedIds.includes(video.id);
+                                    const analyzing = analyzingIds.includes(video.id);
 
                                     return (
                                         <tr key={video.id}>
@@ -276,35 +307,39 @@ export default function Videos() {
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center justify-end gap-1">
-                                                    {video.status === 'ready' && (
-                                                        <Button
-                                                            variant="secondary"
-                                                            disabled={queued}
+                                                    {(video.status === 'uploaded' ||
+                                                        video.status === 'ready' ||
+                                                        video.status === 'failed') && (
+                                                        <ActionButton
+                                                            icon={<Sparkles className="size-4" strokeWidth={1.75} />}
+                                                            label={analyzing ? 'Queuing…' : 'Analyze'}
+                                                            ariaLabel={`Analyze ${video.title}`}
                                                             onClick={() => handleAnalyze(video.id)}
-                                                            className="py-2 px-3 text-xs"
-                                                        >
-                                                            {queued ? 'Queued' : 'Analyze'}
-                                                            <Sparkles className="size-3.5" strokeWidth={1.75} />
-                                                        </Button>
+                                                            disabled={analyzing}
+                                                            hoverClassName="hover:text-primary"
+                                                        />
                                                     )}
-                                                    <button
-                                                        type="button"
+                                                    <ActionButton
+                                                        icon={<Eye className="size-4" strokeWidth={1.75} />}
+                                                        label="View results"
+                                                        ariaLabel={`View results for ${video.title}`}
+                                                        onClick={() => handleViewResults()}
+                                                        hoverClassName="hover:text-primary"
+                                                    />
+                                                    <ActionButton
+                                                        icon={<Pencil className="size-4" strokeWidth={1.75} />}
+                                                        label="Edit"
+                                                        ariaLabel={`Edit ${video.title}`}
                                                         onClick={() => navigate(`/videos/${video.id}/edit`)}
-                                                        aria-label={`Edit ${video.title}`}
-                                                        title="Edit"
-                                                        className="flex size-8 items-center justify-center rounded-lg text-muted-foreground-1 hover:bg-layer-hover hover:text-primary"
-                                                    >
-                                                        <Pencil className="size-4" strokeWidth={1.75} />
-                                                    </button>
-                                                    <button
-                                                        type="button"
+                                                        hoverClassName="hover:text-primary"
+                                                    />
+                                                    <ActionButton
+                                                        icon={<Trash2 className="size-4" strokeWidth={1.75} />}
+                                                        label="Delete"
+                                                        ariaLabel={`Delete ${video.title}`}
                                                         onClick={() => openDeleteDialog(video)}
-                                                        aria-label={`Delete ${video.title}`}
-                                                        title="Delete"
-                                                        className="flex size-8 items-center justify-center rounded-lg text-muted-foreground-1 hover:bg-layer-hover hover:text-destructive"
-                                                    >
-                                                        <Trash2 className="size-4" strokeWidth={1.75} />
-                                                    </button>
+                                                        hoverClassName="hover:text-destructive"
+                                                    />
                                                 </div>
                                             </td>
                                         </tr>

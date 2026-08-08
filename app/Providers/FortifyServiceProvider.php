@@ -26,6 +26,7 @@ class FortifyServiceProvider extends ServiceProvider
     {
         $this->app->singleton(LoginResponseContract::class, LoginResponse::class);
         $this->app->singleton(RegisterResponseContract::class, RegisterResponse::class);
+        $this->app->bind(\Laravel\Fortify\Http\Requests\LoginRequest::class, \App\Http\Requests\Auth\LoginRequest::class);
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Video\AnalyzeVideo;
 use App\Actions\Video\DeleteVideo;
 use App\Actions\Video\ListVideos;
 use App\Actions\Video\ShowVideo;
@@ -60,6 +61,19 @@ class VideoController extends Controller
             return $updateVideo($request->user(), $video, $request->all());
         } catch (ValidationException $e) {
             return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], $e->status);
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function analyze(Request $request, Video $video, AnalyzeVideo $analyzeVideo)
+    {
+        try {
+            return response()->json($analyzeVideo($request->user(), $video));
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
         } catch (Throwable $e) {

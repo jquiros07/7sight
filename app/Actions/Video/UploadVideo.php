@@ -2,6 +2,7 @@
 
 namespace App\Actions\Video;
 
+use App\Actions\Video\Concerns\ValidatesAnalysisConfig;
 use App\Actions\Workspace\Concerns\AuthorizesWorkspaceAccess;
 use App\Enums\VideoStatus;
 use App\Models\User;
@@ -17,6 +18,7 @@ use Illuminate\Validation\ValidationException;
 class UploadVideo
 {
     use AuthorizesWorkspaceAccess;
+    use ValidatesAnalysisConfig;
 
     private const MAX_DURATION_SECONDS = 15 * 60;
 
@@ -35,19 +37,23 @@ class UploadVideo
      */
     public function __invoke(User $user, array $input): Video
     {
-        $validated = Validator::make($input, [
+        $validator = Validator::make($input, array_merge([
             'workspace_id' => ['required', 'integer', Rule::exists('workspaces', 'id')->whereNull('deleted_at')],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'file' => ['required', 'file', 'mimes:mp4,mov,avi,mkv,webm', 'max:512000'],
-        ])->validate();
+        ], $this->analysisConfigRules()));
+
+        $this->applyAnalysisConfigSometimes($validator);
+
+        $validated = $validator->validate();
 
         $workspace = Workspace::findOrFail($validated['workspace_id']);
         $this->authorizeMembership($user, $workspace);
 
         /** @var UploadedFile $file */
         $file = $validated['file'];
-        $path = $file->store('videos', self::DISK);
+        $path = $file->store("videos/{$workspace->id}/{$user->id}", self::DISK);
 
         $metadata = $this->inspect(Storage::disk(self::DISK)->path($path));
 
@@ -72,6 +78,9 @@ class UploadVideo
             'width' => $metadata['width'],
             'height' => $metadata['height'],
             'thumbnail_path' => null,
+            'analysis_types' => $validated['analysis_types'] ?? [],
+            'auto_start_analysis' => $validated['auto_start_analysis'] ?? false,
+            'analysis_config' => $validated['analysis_config'] ?? [],
         ]);
     }
 

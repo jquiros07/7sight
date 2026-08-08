@@ -11,7 +11,7 @@ const variantClasses: Record<ButtonVariant, string> = {
 
 export function buttonVariants(variant: ButtonVariant = 'primary', className?: string) {
     return cn(
-        'w-fit py-3 px-4 inline-flex items-center justify-center gap-x-2 text-sm font-medium rounded-lg border disabled:opacity-50 disabled:pointer-events-none',
+        'w-fit py-1.5 px-3 inline-flex items-center justify-center gap-x-2 text-sm font-medium rounded-lg border disabled:opacity-50 disabled:pointer-events-none',
         variantClasses[variant],
         className,
     );

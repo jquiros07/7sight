@@ -26,6 +26,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'width',
     'height',
     'thumbnail_path',
+    'analysis_types',
+    'auto_start_analysis',
+    'analysis_config',
 ])]
 class Video extends Model
 {
@@ -45,6 +48,9 @@ class Video extends Model
             'duration_seconds' => 'integer',
             'width' => 'integer',
             'height' => 'integer',
+            'analysis_types' => 'array',
+            'auto_start_analysis' => 'boolean',
+            'analysis_config' => 'array',
         ];
     }
 

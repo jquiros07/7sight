@@ -1,0 +1,39 @@
+services:
+  app:
+    build:
+      target: production
+    # Base file bind-mounts the live repo + a vendor volume for local dev hot-reload.
+    # Production runs the image's baked-in code instead, plus a named volume just
+    # for uploaded video files, shared with analysis-worker below.
+    volumes: !override
+      - videos-data:/var/www/html/storage/app/private
+    # Caddy is the public entrypoint; the app no longer needs a host-exposed port.
+    ports: !reset []
+    environment:
+      XDEBUG_MODE: "off"
+
+  analysis-worker:
+    volumes: !override
+      - videos-data:/videos
+
+  mysql:
+    # Only app/analysis-worker need DB access, over the internal docker network.
+    ports: !reset []
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  videos-data:
+  caddy-data:
+  caddy-config:

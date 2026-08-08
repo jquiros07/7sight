@@ -1,0 +1,31 @@
+import os
+
+DB_HOST = os.environ.get("DB_HOST", "mysql")
+DB_PORT = int(os.environ.get("DB_PORT", "3306"))
+DB_DATABASE = os.environ.get("DB_DATABASE", "video_intelligence_platform")
+DB_USERNAME = os.environ.get("DB_USERNAME", "laravel")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
+
+REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
+
+AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
+AWS_DEFAULT_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+AWS_BUCKET = os.environ.get("AWS_BUCKET")
+
+ANALYSIS_PROVIDER = os.environ.get("ANALYSIS_PROVIDER", "rekognition")
+SENTRY_DSN = os.environ.get("SENTRY_DSN")
+
+# Root of the shared volume holding uploaded videos (matches Laravel's
+# 'local' disk root, storage/app/private, mounted read-write into this
+# container so we can also write raw provider responses back for debugging).
+STORAGE_ROOT = os.environ.get("STORAGE_ROOT", "/videos")
+
+STREAM_NAME = "analysis_jobs"
+CONSUMER_GROUP = "analysis_workers"
+CONSUMER_NAME = os.environ.get("HOSTNAME", "worker-1")
+
+MAX_ATTEMPTS = 3
+RETRY_BACKOFF_SECONDS = [5, 30, 120]
+STALE_IDLE_MS = 5 * 60 * 1000  # reclaim messages a crashed worker never acked

@@ -16,8 +16,6 @@ When you ask, briefly tell me: what you want to do, which file(s)/command(s) it
 affects, and why. Wait for my "yes" before proceeding. When in doubt about
 whether something counts as a modifying action, treat it as one and ask.
 
-<!-- add your next permission rule here -->
-
 ## Implementation guidelines
 
 ### Simplicity first
@@ -57,3 +55,9 @@ When updating or fixing an issue:
   requested change, and let me decide.
 - Suggestions for a simple, useful, functional **unit test** covering the change
   are welcome — keep proposed tests small and focused on real behavior.
+
+### Environment & tooling
+- This project runs via Docker Compose. Run `artisan`, `composer`, and `npm` through
+  `docker compose exec <service> ...` — the Windows-side PHP/Composer can't
+  reach the containerized MySQL or resolve realpaths through the
+  `\\wsl.localhost\...` UNC path.

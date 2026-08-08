@@ -3,6 +3,7 @@
 namespace App\Actions\Video;
 
 use App\Actions\Video\Concerns\AuthorizesVideoAccess;
+use App\Actions\Video\Concerns\ValidatesAnalysisConfig;
 use App\Models\User;
 use App\Models\Video;
 use Illuminate\Support\Facades\Validator;
@@ -11,9 +12,10 @@ use Illuminate\Validation\ValidationException;
 class UpdateVideo
 {
     use AuthorizesVideoAccess;
+    use ValidatesAnalysisConfig;
 
     /**
-     * Update a video's title/description. Requires being the uploader or a workspace owner/admin.
+     * Update a video's details and analysis settings. Requires being the uploader or a workspace owner/admin.
      *
      * @param  array<string, mixed>  $input
      *
@@ -23,12 +25,14 @@ class UpdateVideo
     {
         $this->authorizeVideoManagement($user, $video);
 
-        $validated = Validator::make($input, [
+        $validator = Validator::make($input, array_merge([
             'title' => ['sometimes', 'required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-        ])->validate();
+        ], $this->analysisConfigRules(required: false)));
 
-        $video->update($validated);
+        $this->applyAnalysisConfigSometimes($validator);
+
+        $video->update($validator->validate());
 
         return $video;
     }

@@ -6,6 +6,7 @@ import { HSOverlay } from 'preline';
 import { api } from '../lib/api';
 import { getErrorMessages } from '../lib/errors';
 import { cn } from '../lib/utils';
+import { ActionButton } from '@/components/ui/action-button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -100,6 +101,14 @@ export default function Workspaces() {
         load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [page, sort, direction]);
+
+    // Rows (and their tooltips) render after `workspaces` loads, which is after
+    // Router's pathname-based autoInit() already ran. Re-init once they exist.
+    useEffect(() => {
+        if (workspaces) {
+            window.HSStaticMethods.autoInit();
+        }
+    }, [workspaces]);
 
     function handleSort(field: SortField) {
         if (field === sort) {
@@ -204,26 +213,22 @@ export default function Workspaces() {
                                         <td className="px-4 py-3">
                                             <div className="flex justify-end gap-1">
                                                 {(workspace.pivot.role === 'owner' || workspace.pivot.role === 'admin') && (
-                                                    <button
-                                                        type="button"
+                                                    <ActionButton
+                                                        icon={<Pencil className="size-4" strokeWidth={1.75} />}
+                                                        label="Edit"
+                                                        ariaLabel={`Edit ${workspace.name}`}
                                                         onClick={() => navigate(`/workspaces/${workspace.id}/edit`)}
-                                                        aria-label={`Edit ${workspace.name}`}
-                                                        title="Edit"
-                                                        className="flex size-8 items-center justify-center rounded-lg text-muted-foreground-1 hover:bg-layer-hover hover:text-primary"
-                                                    >
-                                                        <Pencil className="size-4" strokeWidth={1.75} />
-                                                    </button>
+                                                        hoverClassName="hover:text-primary"
+                                                    />
                                                 )}
                                                 {workspace.pivot.role === 'owner' && (
-                                                    <button
-                                                        type="button"
+                                                    <ActionButton
+                                                        icon={<Trash2 className="size-4" strokeWidth={1.75} />}
+                                                        label="Delete"
+                                                        ariaLabel={`Delete ${workspace.name}`}
                                                         onClick={() => openDeleteDialog(workspace)}
-                                                        aria-label={`Delete ${workspace.name}`}
-                                                        title="Delete"
-                                                        className="flex size-8 items-center justify-center rounded-lg text-muted-foreground-1 hover:bg-layer-hover hover:text-destructive"
-                                                    >
-                                                        <Trash2 className="size-4" strokeWidth={1.75} />
-                                                    </button>
+                                                        hoverClassName="hover:text-destructive"
+                                                    />
                                                 )}
                                             </div>
                                         </td>
