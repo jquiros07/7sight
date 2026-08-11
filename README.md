@@ -1,17 +1,36 @@
 # 7Sight
 
-A video intelligence platform: teams upload videos into shared workspaces,
-choose what to analyze, and get the results back automatically — no manual
-review, no separate tooling per analysis type.
+**AI-powered video intelligence for teams.** Upload a video, choose what to
+analyze, get structured results and plain-language insights back automatically
+— no manual review, no separate tooling per analysis type.
 
-## Purpose
+![PHP](https://img.shields.io/badge/PHP-8.3%2B-777BB4?logo=php&logoColor=white)
+![Laravel](https://img.shields.io/badge/Laravel-13-FF2D20?logo=laravel&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+
+## Contents
+
+- [Overview](#overview)
+- [Vision](#vision)
+- [Features](#features)
+- [Tech stack](#tech-stack)
+- [Configuration](#configuration)
+- [Local development](#local-development)
+- [Production deployment](#production-deployment)
+
+## Overview
 
 Reviewing video content for what it contains — flagged objects, unsafe
 material, specific items of interest — is slow to do by hand and doesn't scale
 past a handful of videos. 7Sight lets a team upload a video once, declare what
 they care about (content moderation, specific objects, or all detected
-objects), and have that analysis run automatically in the background, with
-results tied back to the video and its workspace.
+objects), and have that analysis run automatically in the background. The
+results come back structured, tied to the video and its workspace, and are
+summarized in plain language by an AI insights layer built specifically for
+what each analysis type produces.
 
 ## Vision
 
@@ -20,39 +39,15 @@ Rekognition is the first implementation, not the only one intended.
 `Object Detection` and `Content Moderation` are live today; `AI Generated`
 (deepfake/synthetic video detection) already exists as a selectable analysis
 type in the UI, deliberately disabled until that capability is actually built.
-The near-term direction is: more analysis providers behind the same interface,
-and a proper results view (the pipeline already produces structured, queryable
-results — surfacing them in the UI is the next step, not yet built).
 
-## Tech stack
-
-**Backend**
-- [Laravel 13](https://laravel.com) (PHP 8.3+) — Action-per-operation pattern, thin controllers
-- [Laravel Fortify](https://laravel.com/docs/fortify) — authentication (registration, email verification, password reset)
-- [Laravel Sanctum](https://laravel.com/docs/sanctum) — API auth for the SPA
-- MySQL 8.4
-- Redis 7 — cache and the analysis job queue (Redis Streams + consumer groups)
-- [getID3](https://github.com/JamesHeinrich/getID3) — video metadata inspection on upload
-- [Sentry](https://sentry.io) — error tracking
-
-**Frontend**
-- React 19 + TypeScript, React Router 7 (SPA, no Inertia)
-- Tailwind CSS 4
-- [Preline UI](https://preline.co) — themed widgets (select, stepper, tooltip, overlay, dropdown) driven via its JS plugin API
-- ApexCharts (dashboard), Axios, Vite
-
-**Analysis worker** (`analysis-worker/`)
-- Python 3.12, plain functions over a framework — no ORM, no DI container
-- `redis-py` — consumes the job queue
-- `boto3` — Amazon Rekognition Video (async label detection + content moderation) and S3
-- `PyMySQL` — writes job/result status directly to the same MySQL database
-- `sentry-sdk` — error tracking, mirroring the PHP side
-
-**Infrastructure**
-- Docker Compose: `app`, `mysql`, `redis`, `analysis-worker` (horizontally scaled), `vite` (dev only)
-- Multi-stage Dockerfile with separate `dev` and `production` targets
-- Caddy — reverse proxy and automatic HTTPS in production
-- See [`DEPLOYMENT.md`](DEPLOYMENT.md) for taking this to a live server
+On top of the raw detections, an AI insights layer turns structured Rekognition
+output into analyst-style summaries — with a distinct prompt and output schema
+per analysis type, not one generic paraphrase applied everywhere. Every
+generated insight is persisted, and a real, data-backed dashboard exists at the
+workspace level. The near-term direction: more analysis providers behind the
+same interface, the `AI Generated` detection type actually implemented, and
+the account-level dashboard (currently a static mock) wired to the same real
+data the workspace dashboard already uses.
 
 ## Features
 
@@ -94,12 +89,76 @@ Analysis-worker replicas scale horizontally with zero code changes
 (`docker compose up -d --scale analysis-worker=N`) — the consumer group
 guarantees safe distribution across replicas.
 
-**Dashboard** — workspace and video counts at a glance.
+**AI-powered insights** — once a video has completed analysis, generate an
+analyst-style summary from the raw detections. Three purpose-built prompts,
+not one generic one, matched to what each analysis type actually produces:
+- **Object detection** — what's in the video, grouped and time-stamped, with
+  notable combinations or changes over time called out.
+- **Threat detection** — a LOW / MEDIUM / HIGH / CRITICAL risk assessment that
+  correlates detections across *all* of a video's completed analysis types
+  (e.g. a person + a weapon), the way a human analyst would.
+- **Content moderation** — a SAFE / REVIEW / UNSAFE verdict with severity,
+  scoped to Rekognition's own moderation labels.
+
+Insights can be generated for a single analysis type or all of them at once,
+and every generated insight is persisted (`video_insights`) for later
+reference.
+
+**Workspace dashboard** — real, per-workspace analytics linked directly from
+the workspace table: video/storage/analysis stat cards, a 14-day upload
+activity chart, a videos-by-status breakdown, analysis jobs by type, the top
+detected labels across the workspace, and threat/moderation flag counts
+sourced from generated AI insights.
 
 **Observability** — Sentry on both the PHP app and the Python worker;
 structured job lifecycle logging (queued, attempt N/3, succeeded, failed) from
 the worker; a durable audit trail in `analysis_jobs`/`analysis_results`
 (status, attempts, error messages) queryable without a separate dashboard.
+
+## Tech stack
+
+**Backend**
+- [Laravel 13](https://laravel.com) (PHP 8.3+) — Action-per-operation pattern, thin controllers
+- [Laravel Fortify](https://laravel.com/docs/fortify) — authentication (registration, email verification, password reset)
+- [Laravel Sanctum](https://laravel.com/docs/sanctum) — API auth for the SPA
+- [laravel/ai](https://github.com/laravel/ai) + Google Gemini — the AI insights layer: three structured-output agents, one per analysis type
+- MySQL 8.4
+- Redis 7 — cache and the analysis job queue (Redis Streams + consumer groups)
+- [getID3](https://github.com/JamesHeinrich/getID3) — video metadata inspection on upload
+- [Sentry](https://sentry.io) — error tracking
+
+**Frontend**
+- React 19 + TypeScript, React Router 7 (SPA, no Inertia)
+- Tailwind CSS 4
+- [Preline UI](https://preline.co) — themed widgets (select, stepper, tooltip, overlay, dropdown) driven via its JS plugin API
+- ApexCharts (workspace dashboard), Axios, Vite
+
+**Analysis worker** (`analysis-worker/`)
+- Python 3.12, plain functions over a framework — no ORM, no DI container
+- `redis-py` — consumes the job queue
+- `boto3` — Amazon Rekognition Video (async label detection + content moderation) and S3
+- `PyMySQL` — writes job/result status directly to the same MySQL database
+- `sentry-sdk` — error tracking, mirroring the PHP side
+
+**Infrastructure**
+- Docker Compose: `app`, `mysql`, `redis`, `analysis-worker` (horizontally scaled), `vite` (dev only)
+- Multi-stage Dockerfile with separate `dev` and `production` targets
+- Caddy — reverse proxy and automatic HTTPS in production
+- See [`DEPLOYMENT.md`](DEPLOYMENT.md) for taking this to a live server
+
+## Configuration
+
+Copy `.env.example` to `.env` and fill in:
+
+| Variable | Purpose |
+|---|---|
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_DEFAULT_REGION` / `AWS_BUCKET` | Rekognition Video + S3 scratch space, used by the analysis worker |
+| `GEMINI_API_KEY` | Google Gemini — powers the AI insights layer (`app/Ai/Agents/*`) |
+| `ANALYSIS_PROVIDER` | Which provider implements the analysis-worker's provider interface (`rekognition` today) |
+| `SENTRY_LARAVEL_DSN` / `SENTRY_DSN` | Optional error tracking, for the PHP app and Python worker respectively |
+
+Everything else (`DB_*`, `REDIS_*`, `MYSQL_*`) has working local defaults for
+Docker Compose out of the box.
 
 ## Local development
 
@@ -111,6 +170,12 @@ docker compose exec app php artisan migrate
 ```
 
 App: `http://localhost:8000` · Vite dev server: `http://localhost:5173`
+
+Run the test suite:
+
+```bash
+docker compose exec app php artisan test
+```
 
 ## Production deployment
 

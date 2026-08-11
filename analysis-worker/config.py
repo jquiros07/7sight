@@ -29,3 +29,21 @@ CONSUMER_NAME = os.environ.get("HOSTNAME", "worker-1")
 MAX_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = [5, 30, 120]
 STALE_IDLE_MS = 5 * 60 * 1000  # reclaim messages a crashed worker never acked
+
+# Threat detection has no dedicated Rekognition API - it reuses the same
+# label-detection call as object detection and filters down to these
+# (normalized: lowercase, spaces/slashes -> underscores). Edit freely if
+# Rekognition surfaces other threat-relevant labels worth tracking.
+THREAT_LABELS = {
+    "weapon",
+    "gun",
+    "handgun",
+    "rifle",
+    "firearm",
+    "knife",
+    "blade",
+    "sword",
+    "explosive",
+    "fire",
+    "smoke",
+}

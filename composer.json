@@ -11,6 +11,7 @@
     "require": {
         "php": "^8.3",
         "james-heinrich/getid3": "^1.9",
+        "laravel/ai": "^0.10.3",
         "laravel/fortify": "^1.37",
         "laravel/framework": "^13.8",
         "laravel/sanctum": "^4.3",

@@ -6,6 +6,7 @@ use App\Actions\Workspace\CreateWorkspace;
 use App\Actions\Workspace\DeleteWorkspace;
 use App\Actions\Workspace\ListWorkspaces;
 use App\Actions\Workspace\ShowWorkspace;
+use App\Actions\Workspace\ShowWorkspaceDashboard;
 use App\Actions\Workspace\UpdateWorkspace;
 use App\Models\Workspace;
 use Illuminate\Http\Request;
@@ -43,6 +44,19 @@ class WorkspaceController extends Controller
     {
         try {
             return $showWorkspace($request->user(), $workspace);
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function dashboard(Request $request, Workspace $workspace, ShowWorkspaceDashboard $showWorkspaceDashboard)
+    {
+        try {
+            return response()->json($showWorkspaceDashboard($request->user(), $workspace));
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
         } catch (Throwable $e) {

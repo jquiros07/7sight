@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
-import { Eye, Loader2, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { Eye, Loader2, Pencil, Plus, Search, SlidersHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import { HSOverlay } from 'preline';
 import { api } from '../lib/api';
 import { getErrorMessages } from '../lib/errors';
@@ -11,6 +11,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 type VideoStatus = 'uploaded' | 'processing' | 'ready' | 'failed';
 
@@ -22,6 +24,7 @@ type Video = {
     duration_seconds: number | null;
     created_at: string;
     workspace: { id: number; name: string };
+    has_completed_analysis: boolean;
 };
 
 type PaginatedVideos = {
@@ -32,6 +35,26 @@ type PaginatedVideos = {
 };
 
 type SortField = 'title' | 'created_at';
+
+type VideoFilters = {
+    search: string;
+    dateFrom: string;
+    dateTo: string;
+    durationMin: string;
+    durationMax: string;
+    sizeMin: string;
+    sizeMax: string;
+};
+
+const EMPTY_FILTERS: VideoFilters = {
+    search: '',
+    dateFrom: '',
+    dateTo: '',
+    durationMin: '',
+    durationMax: '',
+    sizeMin: '',
+    sizeMax: '',
+};
 
 function formatDuration(totalSeconds: number | null): string {
     if (totalSeconds === null) return '—';
@@ -66,8 +89,14 @@ const STATUS_BADGES: Record<VideoStatus, { label: string; className: string; ico
     failed: { label: 'Failed', className: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400', icon: 'dot' },
 };
 
-function StatusBadge({ status }: { status: VideoStatus }) {
-    const badge = STATUS_BADGES[status];
+const ANALYZED_BADGE = {
+    label: 'Analyzed',
+    className: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+    icon: 'dot' as const,
+};
+
+function StatusBadge({ status, analyzed }: { status: VideoStatus; analyzed: boolean }) {
+    const badge = status === 'ready' && analyzed ? ANALYZED_BADGE : STATUS_BADGES[status];
 
     return (
         <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium', badge.className)}>
@@ -78,6 +107,55 @@ function StatusBadge({ status }: { status: VideoStatus }) {
             )}
             {badge.label}
         </span>
+    );
+}
+
+function RangeField({
+    legend,
+    fromLabel,
+    toLabel,
+    fromValue,
+    toValue,
+    onFromChange,
+    onToChange,
+    type = 'number',
+    inputClassName = 'w-20',
+}: {
+    legend: string;
+    fromLabel: string;
+    toLabel: string;
+    fromValue: string;
+    toValue: string;
+    onFromChange: (value: string) => void;
+    onToChange: (value: string) => void;
+    type?: 'number' | 'date';
+    inputClassName?: string;
+}) {
+    return (
+        <div>
+            <Label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground-1">{legend}</Label>
+            <div className="flex items-center gap-1.5">
+                <Input
+                    type={type}
+                    min={type === 'number' ? '0' : undefined}
+                    step={type === 'number' ? '0.1' : undefined}
+                    className={inputClassName}
+                    value={fromValue}
+                    onChange={(e) => onFromChange(e.target.value)}
+                    aria-label={fromLabel}
+                />
+                <span className="text-muted-foreground-1">–</span>
+                <Input
+                    type={type}
+                    min={type === 'number' ? '0' : undefined}
+                    step={type === 'number' ? '0.1' : undefined}
+                    className={inputClassName}
+                    value={toValue}
+                    onChange={(e) => onToChange(e.target.value)}
+                    aria-label={toLabel}
+                />
+            </div>
+        </div>
     );
 }
 
@@ -119,6 +197,9 @@ export default function Videos() {
     const [page, setPage] = useState(1);
     const [sort, setSort] = useState<SortField>('created_at');
     const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
+    const [filtersInput, setFiltersInput] = useState<VideoFilters>(EMPTY_FILTERS);
+    const [filters, setFilters] = useState<VideoFilters>(EMPTY_FILTERS);
+    const [showFilters, setShowFilters] = useState(false);
     const [loading, setLoading] = useState(true);
     const [listError, setListError] = useState<string[]>([]);
     const [statusMessage, setStatusMessage] = useState<string | null>(
@@ -126,7 +207,6 @@ export default function Videos() {
     );
 
     const [analyzingIds, setAnalyzingIds] = useState<number[]>([]);
-    const [stubNote, setStubNote] = useState<string | null>(null);
 
     const [deleteTarget, setDeleteTarget] = useState<Video | null>(null);
     const [deleting, setDeleting] = useState(false);
@@ -140,7 +220,21 @@ export default function Videos() {
 
     function load() {
         setLoading(true);
-        api.get<PaginatedVideos>('/api/videos', { params: { page, sort, direction, per_page: 10 } })
+        api.get<PaginatedVideos>('/api/videos', {
+            params: {
+                page,
+                sort,
+                direction,
+                per_page: 10,
+                search: filters.search || undefined,
+                date_from: filters.dateFrom || undefined,
+                date_to: filters.dateTo || undefined,
+                duration_min: filters.durationMin ? Math.round(Number(filters.durationMin) * 60) : undefined,
+                duration_max: filters.durationMax ? Math.round(Number(filters.durationMax) * 60) : undefined,
+                size_min: filters.sizeMin ? Math.round(Number(filters.sizeMin) * 1024 * 1024) : undefined,
+                size_max: filters.sizeMax ? Math.round(Number(filters.sizeMax) * 1024 * 1024) : undefined,
+            },
+        })
             .then((res) => {
                 setVideos(res.data);
                 setListError([]);
@@ -152,7 +246,22 @@ export default function Videos() {
     useEffect(() => {
         load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page, sort, direction]);
+    }, [page, sort, direction, filters]);
+
+    function handleFilterSubmit(event: FormEvent) {
+        event.preventDefault();
+        setFilters(filtersInput);
+        setPage(1);
+    }
+
+    function handleClearFilters() {
+        setFiltersInput(EMPTY_FILTERS);
+        setFilters(EMPTY_FILTERS);
+        setPage(1);
+    }
+
+    const hasActiveFilters = Object.values(filtersInput).some((value) => value !== '');
+    const hasActiveRangeFilters = Object.entries(filtersInput).some(([key, value]) => key !== 'search' && value !== '');
 
     // Rows (and their tooltips) render after `videos` loads, which is after
     // Router's pathname-based autoInit() already ran. Re-init once they exist.
@@ -195,11 +304,6 @@ export default function Videos() {
         }
     }
 
-    function handleViewResults() {
-        // UI only for now — wire this up once a results view/endpoint exists.
-        setStubNote("Results view isn't available yet — this isn't wired up to the analysis pipeline yet.");
-    }
-
     function openDeleteDialog(video: Video) {
         setDeleteTarget(video);
         HSOverlay.open('#confirm-delete-video');
@@ -232,12 +336,6 @@ export default function Videos() {
                 </Button>
             </div>
 
-            {stubNote && (
-                <Alert className="mt-4" onDismiss={() => setStubNote(null)}>
-                    <AlertDescription>{stubNote}</AlertDescription>
-                </Alert>
-            )}
-
             {statusMessage && listError.length === 0 && (
                 <Alert variant="success" className="mt-4" onDismiss={() => setStatusMessage(null)}>
                     <AlertDescription>{statusMessage}</AlertDescription>
@@ -255,6 +353,81 @@ export default function Videos() {
                     </AlertDescription>
                 </Alert>
             )}
+
+            <Card className="mt-4">
+                <form onSubmit={handleFilterSubmit} className="p-4">
+                    <div className="flex flex-wrap items-end gap-3">
+                        <div className="min-w-[220px] flex-1">
+                            <Label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground-1">
+                                Search
+                            </Label>
+                            <div className="relative">
+                                <Search
+                                    className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground-1"
+                                    strokeWidth={1.75}
+                                />
+                                <Input
+                                    type="search"
+                                    placeholder="Title, workspace, or status…"
+                                    value={filtersInput.search}
+                                    onChange={(e) => setFiltersInput((f) => ({ ...f, search: e.target.value }))}
+                                    className="pl-9"
+                                    aria-label="Search videos"
+                                />
+                            </div>
+                        </div>
+                        <Button type="button" variant="secondary" onClick={() => setShowFilters((v) => !v)}>
+                            <SlidersHorizontal className="size-4" strokeWidth={1.75} />
+                            Filters
+                            {hasActiveRangeFilters && <span className="size-1.5 rounded-full bg-primary" />}
+                        </Button>
+                        {hasActiveFilters && (
+                            <Button type="button" variant="secondary" onClick={handleClearFilters}>
+                                Clear
+                                <X className="size-4" strokeWidth={1.75} />
+                            </Button>
+                        )}
+                        <Button type="submit" variant="secondary">
+                            Search
+                            <Search className="size-4" strokeWidth={1.75} />
+                        </Button>
+                    </div>
+
+                    {showFilters && (
+                        <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3 border-t border-card-line pt-4">
+                            <RangeField
+                                legend="Uploaded"
+                                fromLabel="Uploaded from date"
+                                toLabel="Uploaded to date"
+                                fromValue={filtersInput.dateFrom}
+                                toValue={filtersInput.dateTo}
+                                onFromChange={(value) => setFiltersInput((f) => ({ ...f, dateFrom: value }))}
+                                onToChange={(value) => setFiltersInput((f) => ({ ...f, dateTo: value }))}
+                                type="date"
+                                inputClassName="w-36"
+                            />
+                            <RangeField
+                                legend="Duration (min)"
+                                fromLabel="Minimum duration in minutes"
+                                toLabel="Maximum duration in minutes"
+                                fromValue={filtersInput.durationMin}
+                                toValue={filtersInput.durationMax}
+                                onFromChange={(value) => setFiltersInput((f) => ({ ...f, durationMin: value }))}
+                                onToChange={(value) => setFiltersInput((f) => ({ ...f, durationMax: value }))}
+                            />
+                            <RangeField
+                                legend="Size (MB)"
+                                fromLabel="Minimum size in megabytes"
+                                toLabel="Maximum size in megabytes"
+                                fromValue={filtersInput.sizeMin}
+                                toValue={filtersInput.sizeMax}
+                                onFromChange={(value) => setFiltersInput((f) => ({ ...f, sizeMin: value }))}
+                                onToChange={(value) => setFiltersInput((f) => ({ ...f, sizeMax: value }))}
+                            />
+                        </div>
+                    )}
+                </form>
+            </Card>
 
             <Card className="mt-4 overflow-hidden">
                 <div className="overflow-x-auto">
@@ -298,7 +471,7 @@ export default function Videos() {
                                             <td className="px-4 py-3 font-medium text-foreground">{video.title}</td>
                                             <td className="px-4 py-3 text-muted-foreground-1">{video.workspace.name}</td>
                                             <td className="px-4 py-3">
-                                                <StatusBadge status={video.status} />
+                                                <StatusBadge status={video.status} analyzed={video.has_completed_analysis} />
                                             </td>
                                             <td className="px-4 py-3 text-muted-foreground-1">{formatDuration(video.duration_seconds)}</td>
                                             <td className="px-4 py-3 text-muted-foreground-1">{formatFileSize(video.size)}</td>
@@ -323,7 +496,7 @@ export default function Videos() {
                                                         icon={<Eye className="size-4" strokeWidth={1.75} />}
                                                         label="View results"
                                                         ariaLabel={`View results for ${video.title}`}
-                                                        onClick={() => handleViewResults()}
+                                                        onClick={() => navigate(`/videos/${video.id}/results`)}
                                                         hoverClassName="hover:text-primary"
                                                     />
                                                     <ActionButton

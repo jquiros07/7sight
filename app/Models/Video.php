@@ -68,4 +68,9 @@ class Video extends Model
     {
         return $this->hasMany(AnalysisJob::class);
     }
+
+    public function insights(): HasMany
+    {
+        return $this->hasMany(VideoInsight::class);
+    }
 }

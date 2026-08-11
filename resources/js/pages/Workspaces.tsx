@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { LayoutDashboard, Pencil, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { HSOverlay } from 'preline';
 import { api } from '../lib/api';
 import { getErrorMessages } from '../lib/errors';
@@ -11,6 +11,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 type Role = 'owner' | 'admin' | 'member';
 
@@ -32,6 +34,14 @@ type PaginatedWorkspaces = {
 };
 
 type SortField = 'name' | 'created_at';
+
+type WorkspaceFilters = {
+    search: string;
+    dateFrom: string;
+    dateTo: string;
+};
+
+const EMPTY_FILTERS: WorkspaceFilters = { search: '', dateFrom: '', dateTo: '' };
 
 function SortButton({
     label,
@@ -70,6 +80,9 @@ export default function Workspaces() {
     const [page, setPage] = useState(1);
     const [sort, setSort] = useState<SortField>('created_at');
     const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
+    const [filtersInput, setFiltersInput] = useState<WorkspaceFilters>(EMPTY_FILTERS);
+    const [filters, setFilters] = useState<WorkspaceFilters>(EMPTY_FILTERS);
+    const [showFilters, setShowFilters] = useState(false);
     const [loading, setLoading] = useState(true);
     const [listError, setListError] = useState<string[]>([]);
     const [statusMessage, setStatusMessage] = useState<string | null>(
@@ -88,7 +101,17 @@ export default function Workspaces() {
 
     function load() {
         setLoading(true);
-        api.get<PaginatedWorkspaces>('/api/workspaces', { params: { page, sort, direction, per_page: 10 } })
+        api.get<PaginatedWorkspaces>('/api/workspaces', {
+            params: {
+                page,
+                sort,
+                direction,
+                per_page: 10,
+                search: filters.search || undefined,
+                date_from: filters.dateFrom || undefined,
+                date_to: filters.dateTo || undefined,
+            },
+        })
             .then((res) => {
                 setWorkspaces(res.data);
                 setListError([]);
@@ -100,7 +123,22 @@ export default function Workspaces() {
     useEffect(() => {
         load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page, sort, direction]);
+    }, [page, sort, direction, filters]);
+
+    function handleFilterSubmit(event: FormEvent) {
+        event.preventDefault();
+        setFilters(filtersInput);
+        setPage(1);
+    }
+
+    function handleClearFilters() {
+        setFiltersInput(EMPTY_FILTERS);
+        setFilters(EMPTY_FILTERS);
+        setPage(1);
+    }
+
+    const hasActiveFilters = Object.values(filtersInput).some((value) => value !== '');
+    const hasActiveRangeFilters = Object.entries(filtersInput).some(([key, value]) => key !== 'search' && value !== '');
 
     // Rows (and their tooltips) render after `workspaces` loads, which is after
     // Router's pathname-based autoInit() already ran. Re-init once they exist.
@@ -170,6 +208,72 @@ export default function Workspaces() {
                 </Alert>
             )}
 
+            <Card className="mt-4">
+                <form onSubmit={handleFilterSubmit} className="p-4">
+                    <div className="flex flex-wrap items-end gap-3">
+                        <div className="min-w-[220px] flex-1">
+                            <Label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground-1">
+                                Search
+                            </Label>
+                            <div className="relative">
+                                <Search
+                                    className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground-1"
+                                    strokeWidth={1.75}
+                                />
+                                <Input
+                                    type="search"
+                                    placeholder="Name or description…"
+                                    value={filtersInput.search}
+                                    onChange={(e) => setFiltersInput((f) => ({ ...f, search: e.target.value }))}
+                                    className="pl-9"
+                                    aria-label="Search workspaces"
+                                />
+                            </div>
+                        </div>
+                        <Button type="button" variant="secondary" onClick={() => setShowFilters((v) => !v)}>
+                            <SlidersHorizontal className="size-4" strokeWidth={1.75} />
+                            Filters
+                            {hasActiveRangeFilters && <span className="size-1.5 rounded-full bg-primary" />}
+                        </Button>
+                        {hasActiveFilters && (
+                            <Button type="button" variant="secondary" onClick={handleClearFilters}>
+                                Clear
+                                <X className="size-4" strokeWidth={1.75} />
+                            </Button>
+                        )}
+                        <Button type="submit" variant="secondary">
+                            Search
+                            <Search className="size-4" strokeWidth={1.75} />
+                        </Button>
+                    </div>
+
+                    {showFilters && (
+                        <div className="mt-4 border-t border-card-line pt-4">
+                            <Label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground-1">
+                                Created
+                            </Label>
+                            <div className="flex items-center gap-1.5">
+                                <Input
+                                    type="date"
+                                    className="w-36"
+                                    value={filtersInput.dateFrom}
+                                    onChange={(e) => setFiltersInput((f) => ({ ...f, dateFrom: e.target.value }))}
+                                    aria-label="Created from date"
+                                />
+                                <span className="text-muted-foreground-1">–</span>
+                                <Input
+                                    type="date"
+                                    className="w-36"
+                                    value={filtersInput.dateTo}
+                                    onChange={(e) => setFiltersInput((f) => ({ ...f, dateTo: e.target.value }))}
+                                    aria-label="Created to date"
+                                />
+                            </div>
+                        </div>
+                    )}
+                </form>
+            </Card>
+
             <Card className="mt-4 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
@@ -212,6 +316,13 @@ export default function Workspaces() {
                                         </td>
                                         <td className="px-4 py-3">
                                             <div className="flex justify-end gap-1">
+                                                <ActionButton
+                                                    icon={<LayoutDashboard className="size-4" strokeWidth={1.75} />}
+                                                    label="Dashboard"
+                                                    ariaLabel={`View ${workspace.name} dashboard`}
+                                                    onClick={() => navigate(`/workspaces/${workspace.id}/dashboard`)}
+                                                    hoverClassName="hover:text-primary"
+                                                />
                                                 {(workspace.pivot.role === 'owner' || workspace.pivot.role === 'admin') && (
                                                     <ActionButton
                                                         icon={<Pencil className="size-4" strokeWidth={1.75} />}

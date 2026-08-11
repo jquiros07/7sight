@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label';
 const ANALYSIS_TYPE_OPTIONS = [
     { value: 'content_moderation', label: 'Content Moderation', disabled: false },
     { value: 'object_detection', label: 'Object Detection', disabled: false },
+    { value: 'threat_detection', label: 'Threat Detection', disabled: false },
     { value: 'ai_generated', label: 'AI Generated', disabled: true },
 ] as const;
 

@@ -34,7 +34,7 @@ whether something counts as a modifying action, treat it as one and ask.
 - Use the **Action + Controller** pattern: controllers stay thin and handle only
   the HTTP layer (validate, call an Action, return a response); business logic
   lives in single-purpose Action classes.
-- Always check linting, verify correct build and run a quick test of the implementation before considering the task done.
+- Always check linting and verify correct build. Run a quick test of the implementation before considering the task done but ask before running end-to-end test.
 
 ### Error handling
 - Wrap logic that can fail in `try/catch`.

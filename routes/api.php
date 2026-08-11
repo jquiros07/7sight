@@ -22,7 +22,10 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::apiResource('workspaces', WorkspaceController::class);
+    Route::get('/workspaces/{workspace}/dashboard', [WorkspaceController::class, 'dashboard']);
     Route::apiResource('videos', VideoController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
     Route::post('/videos/{video}/analyze', [VideoController::class, 'analyze']);
+    Route::get('/videos/{video}/stream', [VideoController::class, 'stream']);
+    Route::post('/videos/{video}/insights', [VideoController::class, 'insights']);
     Route::get('/object-detection-categories', [ObjectDetectionCategoryController::class, 'index']);
 });

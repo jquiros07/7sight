@@ -35,6 +35,12 @@ def filter_to_selected_objects(detections, analysis_config):
     return [d for d in detections if normalize_label(d.label) in selected]
 
 
+def filter_to_threat_labels(detections):
+    """Threat detection has no dedicated Rekognition API - it reuses the same
+    label-detection call as object detection, filtered to config.THREAT_LABELS."""
+    return [d for d in detections if normalize_label(d.label) in config.THREAT_LABELS]
+
+
 def run_analysis(provider, job):
     video_path = f"{config.STORAGE_ROOT}/{job['video_path']}"
 
@@ -42,6 +48,10 @@ def run_analysis(provider, job):
         detections = provider.detect_objects(video_path)
         analysis_config = json.loads(job["video_analysis_config"]) if job.get("video_analysis_config") else {}
         return filter_to_selected_objects(detections, analysis_config)
+
+    if job["type"] == "threat_detection":
+        detections = provider.detect_objects(video_path)
+        return filter_to_threat_labels(detections)
 
     if job["type"] == "content_moderation":
         return provider.moderate_content(video_path)

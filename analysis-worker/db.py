@@ -111,18 +111,29 @@ def save_results(conn, job_id, rows):
 
 
 def recompute_video_status(conn, video_id):
-    """Video is 'processing' while any job is pending/processing, 'failed' if any
-    job failed, otherwise 'ready' once every job has completed."""
+    """Video is 'processing' while any job is pending/processing, 'failed' if the
+    most recent job for any analysis type failed, otherwise 'ready' once every
+    type's most recent job has completed. A retry's older, superseded attempt of
+    the same type is ignored so a later success can clear an earlier failure."""
     with conn.cursor() as cursor:
         cursor.execute(
-            "SELECT status, COUNT(*) AS total FROM analysis_jobs WHERE video_id = %s GROUP BY status",
+            """
+            SELECT aj.status
+            FROM analysis_jobs aj
+            INNER JOIN (
+                SELECT type, MAX(id) AS latest_id
+                FROM analysis_jobs
+                WHERE video_id = %s
+                GROUP BY type
+            ) latest ON latest.type = aj.type AND latest.latest_id = aj.id
+            """,
             (video_id,),
         )
-        counts = {row["status"]: row["total"] for row in cursor.fetchall()}
+        statuses = {row["status"] for row in cursor.fetchall()}
 
-        if counts.get("pending") or counts.get("processing"):
+        if "pending" in statuses or "processing" in statuses:
             status = "processing"
-        elif counts.get("failed"):
+        elif "failed" in statuses:
             status = "failed"
         else:
             status = "ready"

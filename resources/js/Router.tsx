@@ -8,9 +8,11 @@ import Profile from './pages/Profile';
 import Register from './pages/Register';
 import VerifyEmail from './pages/VerifyEmail';
 import VideoEdit from './pages/VideoEdit';
+import VideoResults from './pages/VideoResults';
 import VideoUpload from './pages/VideoUpload';
 import Videos from './pages/Videos';
 import WorkspaceCreate from './pages/WorkspaceCreate';
+import WorkspaceDashboard from './pages/WorkspaceDashboard';
 import WorkspaceEdit from './pages/WorkspaceEdit';
 import Workspaces from './pages/Workspaces';
 
@@ -67,6 +69,14 @@ export default function Router() {
                 }
             />
             <Route
+                path="/videos/:id/results"
+                element={
+                    <RequireAuth>
+                        <VideoResults />
+                    </RequireAuth>
+                }
+            />
+            <Route
                 path="/workspaces"
                 element={
                     <RequireAuth>
@@ -87,6 +97,14 @@ export default function Router() {
                 element={
                     <RequireAuth>
                         <WorkspaceEdit />
+                    </RequireAuth>
+                }
+            />
+            <Route
+                path="/workspaces/:id/dashboard"
+                element={
+                    <RequireAuth>
+                        <WorkspaceDashboard />
                     </RequireAuth>
                 }
             />
