@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { ApexOptions } from 'apexcharts';
 import { AppLayout } from '@/components/AppLayout';
-import { ChevronLeft, Lightbulb, Loader2 } from 'lucide-react';
+import { ChevronLeft, Download, Lightbulb, Loader2 } from 'lucide-react';
 import { buildTooltip, type IBuildTooltipHelperOptions, type IChartProps } from 'preline/helpers/apexcharts';
 import { varToColor } from 'preline/helpers/shared';
 import { api } from '../lib/api';
@@ -176,6 +176,12 @@ function formatFileSize(bytes: number): string {
     return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
+// Caps how many bars the chart draws — with a lot of distinct labels an
+// unbounded chart grows without limit (one video hit 80+ labels and the bar
+// chart alone was taller than the rest of the page). The full table below
+// still lists everything; the chart is just the headline trend.
+const MAX_CHART_BARS = 12;
+
 // A one-bar chart isn't a chart — only worth rendering once there's more than
 // one label to compare.
 function OccurrencesChart({ results }: { results: AnalysisResult[] }) {
@@ -188,6 +194,7 @@ function OccurrencesChart({ results }: { results: AnalysisResult[] }) {
     const gridBorder = varToColor(`--chart-colors-grid-border${suffix}`) ?? '#e4e4e7';
 
     const sorted = results.slice().sort((a, b) => b.occurrences - a.occurrences);
+    const chartData = sorted.slice(0, MAX_CHART_BARS);
 
     const options: ApexOptions = {
         chart: { fontFamily: 'inherit' },
@@ -198,7 +205,7 @@ function OccurrencesChart({ results }: { results: AnalysisResult[] }) {
         stroke: { show: true, width: 2, colors: ['transparent'] },
         grid: { borderColor: gridBorder, xaxis: { lines: { show: false } } },
         xaxis: {
-            categories: sorted.map((r) => r.label),
+            categories: chartData.map((r) => r.label),
             crosshairs: { show: false },
             labels: { show: false },
             axisTicks: { show: false },
@@ -214,7 +221,7 @@ function OccurrencesChart({ results }: { results: AnalysisResult[] }) {
         tooltip: {
             custom: (props) =>
                 buildTooltip(props as IChartProps, {
-                    title: sorted[props.dataPointIndex].label,
+                    title: chartData[props.dataPointIndex].label,
                     mode,
                     valuePrefix: '',
                     valuePostfix: props.series[props.seriesIndex][props.dataPointIndex] === 1 ? ' occurrence' : ' occurrences',
@@ -224,12 +231,19 @@ function OccurrencesChart({ results }: { results: AnalysisResult[] }) {
     };
 
     return (
-        <ApexChart
-            type="bar"
-            height={Math.max(120, sorted.length * 44)}
-            options={options}
-            series={[{ name: 'Occurrences', data: sorted.map((r) => r.occurrences) }]}
-        />
+        <div>
+            <ApexChart
+                type="bar"
+                height={Math.max(120, chartData.length * 40)}
+                options={options}
+                series={[{ name: 'Occurrences', data: chartData.map((r) => r.occurrences) }]}
+            />
+            {sorted.length > MAX_CHART_BARS && (
+                <p className="mt-1 text-center text-xs text-muted-foreground-2">
+                    Showing top {MAX_CHART_BARS} of {sorted.length} labels — see the full table below.
+                </p>
+            )}
+        </div>
     );
 }
 
@@ -311,21 +325,21 @@ function ThreatAssessmentSection({ assessment }: { assessment: ThreatAssessment 
             <p className="text-sm text-muted-foreground-1">{assessment.reasoning}</p>
 
             {assessment.evidence.length > 0 && (
-                <div className="overflow-x-auto">
+                <div className="max-h-96 overflow-auto rounded-lg border border-card-line">
                     <table className="w-full text-left text-sm">
-                        <thead className="border-b border-card-line">
+                        <thead className="sticky top-0 border-b border-card-line bg-card">
                             <tr>
-                                <th className="py-2 pr-4 font-medium text-muted-foreground-1">Label</th>
+                                <th className="py-2 pr-4 pl-3 font-medium text-muted-foreground-1">Label</th>
                                 <th className="py-2 pr-4 font-medium text-muted-foreground-1">Confidence</th>
-                                <th className="py-2 font-medium text-muted-foreground-1">Timestamp</th>
+                                <th className="py-2 pr-3 font-medium text-muted-foreground-1">Timestamp</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-card-line">
                             {assessment.evidence.map((item, index) => (
                                 <tr key={`${item.label}-${item.timestamp}-${index}`}>
-                                    <td className="py-2 pr-4 font-medium text-foreground">{item.label}</td>
+                                    <td className="py-2 pr-4 pl-3 font-medium text-foreground">{item.label}</td>
                                     <td className="py-2 pr-4 text-muted-foreground-1">{item.rekognition_confidence.toFixed(1)}%</td>
-                                    <td className="py-2 text-muted-foreground-1">{formatSeconds(item.timestamp)}</td>
+                                    <td className="py-2 pr-3 text-muted-foreground-1">{formatSeconds(item.timestamp)}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -419,15 +433,15 @@ function AnalysisJobCard({ job }: { job: AnalysisJob }) {
                 )}
 
                 {job.status === 'completed' && job.results.length > 0 && (
-                    <div className="overflow-x-auto">
+                    <div className="max-h-96 overflow-auto rounded-lg border border-card-line">
                         <table className="w-full text-left text-sm">
-                            <thead className="border-b border-card-line">
+                            <thead className="sticky top-0 border-b border-card-line bg-card">
                                 <tr>
-                                    <th className="py-2 pr-4 font-medium text-muted-foreground-1">Label</th>
+                                    <th className="py-2 pr-4 pl-3 font-medium text-muted-foreground-1">Label</th>
                                     <th className="py-2 pr-4 font-medium text-muted-foreground-1">Occurrences</th>
                                     <th className="py-2 pr-4 font-medium text-muted-foreground-1">Avg. confidence</th>
                                     <th className="py-2 pr-4 font-medium text-muted-foreground-1">First seen</th>
-                                    <th className="py-2 font-medium text-muted-foreground-1">Last seen</th>
+                                    <th className="py-2 pr-3 font-medium text-muted-foreground-1">Last seen</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-card-line">
@@ -436,11 +450,11 @@ function AnalysisJobCard({ job }: { job: AnalysisJob }) {
                                     .sort((a, b) => b.occurrences - a.occurrences)
                                     .map((result) => (
                                         <tr key={result.id}>
-                                            <td className="py-2 pr-4 font-medium text-foreground">{result.label}</td>
+                                            <td className="py-2 pr-4 pl-3 font-medium text-foreground">{result.label}</td>
                                             <td className="py-2 pr-4 text-muted-foreground-1">{result.occurrences}</td>
                                             <td className="py-2 pr-4 text-muted-foreground-1">{result.avg_confidence.toFixed(1)}%</td>
                                             <td className="py-2 pr-4 text-muted-foreground-1">{formatSeconds(result.first_seen_at)}</td>
-                                            <td className="py-2 text-muted-foreground-1">{formatSeconds(result.last_seen_at)}</td>
+                                            <td className="py-2 pr-3 text-muted-foreground-1">{formatSeconds(result.last_seen_at)}</td>
                                         </tr>
                                     ))}
                             </tbody>
@@ -508,8 +522,16 @@ export default function VideoResults() {
 
             {!loading && video && (
                 <>
-                    <h1 className="mt-4 font-heading text-2xl font-medium">{video.title}</h1>
-                    {video.description && <p className="mt-1 text-sm text-muted-foreground-1">{video.description}</p>}
+                    <div className="mt-4 flex items-start justify-between gap-4">
+                        <div>
+                            <h1 className="font-heading text-2xl font-medium">{video.title}</h1>
+                            {video.description && <p className="mt-1 text-sm text-muted-foreground-1">{video.description}</p>}
+                        </div>
+                        <Button variant="secondary" onClick={() => window.open(`/api/videos/${video.id}/report`, '_blank')}>
+                            <Download className="size-4" strokeWidth={1.75} />
+                            Download report
+                        </Button>
+                    </div>
 
                     <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-3">
                         <video

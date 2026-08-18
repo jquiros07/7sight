@@ -3,6 +3,7 @@
 namespace App\Actions\Dashboard;
 
 use App\Enums\VideoStatus;
+use App\Models\AnalysisResult;
 use App\Models\User;
 use App\Models\Video;
 use App\Models\Workspace;
@@ -15,6 +16,17 @@ class ShowDashboard
     private const SPOTLIGHT_LIMIT = 5;
 
     private const ACTIVITY_LIMIT = 8;
+
+    private const TOP_LABELS_LIMIT = 8;
+
+    /**
+     * A video sitting in "processing" without any of its jobs completing (or
+     * failing) for this long is treated as stuck - recompute_video_status()
+     * touches the video's updated_at every time any of its jobs finishes, so
+     * a stale updated_at means no progress has happened, not just a long
+     * video still legitimately being analyzed.
+     */
+    private const STUCK_PROCESSING_MINUTES = 30;
 
     private const RISK_RANK = ['CRITICAL' => 4, 'HIGH' => 3, 'MEDIUM' => 2, 'LOW' => 1];
 
@@ -33,10 +45,12 @@ class ShowDashboard
     {
         $workspaces = $user->workspaces()->get();
         $workspaceNames = $workspaces->pluck('name', 'id');
+        $workspaceIds = $workspaces->pluck('id');
 
         $videos = Video::query()
-            ->whereIn('workspace_id', $workspaces->pluck('id'))
-            ->with('insights')
+            ->select(['id', 'workspace_id', 'title', 'status', 'size', 'created_at', 'updated_at'])
+            ->whereIn('workspace_id', $workspaceIds)
+            ->with(['insights:id,video_id,threat_assessment,moderation,created_at'])
             ->get();
 
         $signals = $this->flaggedSignals($videos, $workspaceNames);
@@ -48,6 +62,7 @@ class ShowDashboard
                 'total_storage_bytes' => (int) $videos->sum('size'),
                 'failed_videos' => $videos->where('status', VideoStatus::Failed)->count(),
                 'processing_videos' => $videos->where('status', VideoStatus::Processing)->count(),
+                'stuck_processing_videos' => $this->stuckProcessingVideos($videos),
             ],
             'uploads_over_time' => $this->uploadsOverTime($videos),
             'safety_spotlight' => [
@@ -57,7 +72,34 @@ class ShowDashboard
             ],
             'workspace_leaderboard' => $this->workspaceLeaderboard($workspaces, $videos, $signals),
             'recent_activity' => $this->recentActivity($videos, $workspaceNames),
+            'top_labels' => $this->topLabels($workspaceIds),
         ];
+    }
+
+    /**
+     * The most frequent detection labels across every video in every
+     * workspace the user belongs to. A DB-level aggregate rather than
+     * loading every AnalysisResult row into PHP - unlike $videos above,
+     * nothing else in this action needs the raw result rows, so there's no
+     * reason to pull them into memory just to sum them here.
+     *
+     * @param  Collection<int, int>  $workspaceIds
+     * @return array<int, array{label: string, occurrences: int}>
+     */
+    private function topLabels(Collection $workspaceIds): array
+    {
+        return AnalysisResult::query()
+            ->join('analysis_jobs', 'analysis_jobs.id', '=', 'analysis_results.analysis_job_id')
+            ->join('videos', 'videos.id', '=', 'analysis_jobs.video_id')
+            ->whereIn('videos.workspace_id', $workspaceIds)
+            ->whereNull('videos.deleted_at')
+            ->selectRaw('analysis_results.label as label, SUM(analysis_results.occurrences) as occurrences')
+            ->groupBy('analysis_results.label')
+            ->orderByDesc('occurrences')
+            ->limit(self::TOP_LABELS_LIMIT)
+            ->get()
+            ->map(fn ($row) => ['label' => $row->label, 'occurrences' => (int) $row->occurrences])
+            ->all();
     }
 
     /**
@@ -75,6 +117,19 @@ class ShowDashboard
                 return ['date' => $date, 'count' => $byDate->get($date, 0)];
             })
             ->all();
+    }
+
+    /**
+     * @param  Collection<int, Video>  $videos
+     */
+    private function stuckProcessingVideos(Collection $videos): int
+    {
+        $staleSince = now()->subMinutes(self::STUCK_PROCESSING_MINUTES);
+
+        return $videos
+            ->where('status', VideoStatus::Processing)
+            ->filter(fn (Video $video) => $video->updated_at->lt($staleSince))
+            ->count();
     }
 
     /**

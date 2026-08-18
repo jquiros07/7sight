@@ -1,0 +1,8 @@
+{
+    "name": "browsershot-runtime",
+    "private": true,
+    "description": "Isolated puppeteer-core install for spatie/browsershot (PDF report generation). Kept separate from the root package.json so the PHP runtime image doesn't pull in the frontend's build tooling. Aliased to the 'puppeteer' name because Browsershot's bin/browser.cjs hardcodes require('puppeteer') - this installs puppeteer-core's code (no bundled Chromium download; we use the system chromium apt package instead) under that name so the require still resolves.",
+    "dependencies": {
+        "puppeteer": "npm:puppeteer-core@^23.11.1"
+    }
+}

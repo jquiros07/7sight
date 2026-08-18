@@ -38,9 +38,16 @@ def filter_to_selected_objects(detections, analysis_config):
 
 
 def filter_to_threat_labels(detections):
-    """Threat detection has no dedicated Rekognition API - it reuses the same
-    label-detection call as object detection, filtered to config.THREAT_LABELS."""
+    """Physical weapon/hazard objects from the label-detection call, filtered
+    to config.THREAT_LABELS."""
     return [d for d in detections if normalize_label(d.label) in config.THREAT_LABELS]
+
+
+def filter_to_threat_moderation_labels(detections):
+    """Violence categories from the content-moderation call, filtered to
+    config.THREAT_MODERATION_LABELS - catches unarmed violence (e.g. a
+    physical fight) that label detection alone can't see."""
+    return [d for d in detections if normalize_label(d.label) in config.THREAT_MODERATION_LABELS]
 
 
 def run_analysis(provider, job):
@@ -52,8 +59,9 @@ def run_analysis(provider, job):
         return filter_to_selected_objects(detections, analysis_config)
 
     if job["type"] == "threat_detection":
-        detections = provider.detect_objects(video_path)
-        return filter_to_threat_labels(detections)
+        weapon_detections = filter_to_threat_labels(provider.detect_objects(video_path))
+        violence_detections = filter_to_threat_moderation_labels(provider.moderate_content(video_path))
+        return weapon_detections + violence_detections
 
     if job["type"] == "content_moderation":
         return provider.moderate_content(video_path)

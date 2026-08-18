@@ -3,12 +3,16 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { ApexOptions } from 'apexcharts';
 import { AppLayout } from '@/components/AppLayout';
 import {
+    AlertTriangle,
     CheckCircle2,
+    Clock,
     Database,
     Folder,
+    Lightbulb,
     Loader2,
     ShieldAlert,
     ShieldQuestion,
+    Tag,
     Video,
     XCircle,
 } from 'lucide-react';
@@ -21,6 +25,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApexChart } from '@/components/ui/chart';
+import { Progress } from '@/components/ui/progress';
 
 type VideoStatus = 'uploaded' | 'processing' | 'ready' | 'failed';
 
@@ -56,6 +61,7 @@ type DashboardData = {
         total_storage_bytes: number;
         failed_videos: number;
         processing_videos: number;
+        stuck_processing_videos: number;
     };
     uploads_over_time: { date: string; count: number }[];
     safety_spotlight: {
@@ -65,6 +71,21 @@ type DashboardData = {
     };
     workspace_leaderboard: LeaderboardWorkspace[];
     recent_activity: ActivityVideo[];
+    top_labels: { label: string; occurrences: number }[];
+};
+
+type SuggestionTone = 'warning' | 'success' | 'info';
+
+type Suggestion = {
+    icon: ReactNode;
+    tone: SuggestionTone;
+    text: string;
+};
+
+const SUGGESTION_TONE_STYLES: Record<SuggestionTone, string> = {
+    warning: 'bg-red-500/10 text-red-600 dark:text-red-400',
+    success: 'bg-green-500/10 text-green-600 dark:text-green-400',
+    info: 'bg-primary/10 text-primary',
 };
 
 const SEVERITY_STYLES: Record<string, string> = {
@@ -81,6 +102,78 @@ const STATUS_STYLES: Record<VideoStatus, { label: string; className: string }> =
     ready: { label: 'Analyzed', className: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' },
     failed: { label: 'Failed', className: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' },
 };
+
+// Small deterministic tips derived from stats already in the dashboard
+// payload - no extra AI call, so this is always available and instant.
+function computeSuggestions(dashboard: DashboardData): Suggestion[] {
+    if (dashboard.stats.total_videos === 0) return [];
+
+    const suggestions: Suggestion[] = [];
+
+    if (dashboard.stats.failed_videos > 0) {
+        const n = dashboard.stats.failed_videos;
+        suggestions.push({
+            icon: <XCircle className="size-4" strokeWidth={1.75} />,
+            tone: 'warning',
+            text: `${n} video${n === 1 ? '' : 's'} failed analysis — review and retry ${n === 1 ? 'it' : 'them'}.`,
+        });
+    }
+
+    if (dashboard.stats.stuck_processing_videos > 0) {
+        const n = dashboard.stats.stuck_processing_videos;
+        suggestions.push({
+            icon: <AlertTriangle className="size-4" strokeWidth={1.75} />,
+            tone: 'warning',
+            text: `${n} video${n === 1 ? '' : 's'} stuck processing for over 30 minutes — may need a retry.`,
+        });
+    }
+
+    const flagged = dashboard.safety_spotlight.threats_detected + dashboard.safety_spotlight.flagged_moderation;
+    if (flagged > 0) {
+        suggestions.push({
+            icon: <ShieldAlert className="size-4" strokeWidth={1.75} />,
+            tone: 'warning',
+            text: `${flagged} video${flagged === 1 ? '' : 's'} flagged for safety — see the spotlight.`,
+        });
+    } else {
+        suggestions.push({
+            icon: <CheckCircle2 className="size-4" strokeWidth={1.75} />,
+            tone: 'success',
+            text: 'No safety flags across your workspaces — all clear.',
+        });
+    }
+
+    if (dashboard.stats.processing_videos > 0) {
+        const n = dashboard.stats.processing_videos;
+        suggestions.push({
+            icon: <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />,
+            tone: 'info',
+            text: `${n} video${n === 1 ? '' : 's'} currently being analyzed.`,
+        });
+    }
+
+    const recentUploads = dashboard.uploads_over_time.reduce((sum, day) => sum + day.count, 0);
+    if (recentUploads === 0) {
+        suggestions.push({
+            icon: <Clock className="size-4" strokeWidth={1.75} />,
+            tone: 'info',
+            text: 'No uploads in the past 14 days.',
+        });
+    }
+
+    return suggestions;
+}
+
+function SuggestionBox({ suggestion }: { suggestion: Suggestion }) {
+    return (
+        <div className="flex items-start gap-2.5 rounded-lg bg-layer p-3">
+            <div className={cn('flex size-7 shrink-0 items-center justify-center rounded-lg', SUGGESTION_TONE_STYLES[suggestion.tone])}>
+                {suggestion.icon}
+            </div>
+            <p className="text-sm text-foreground">{suggestion.text}</p>
+        </div>
+    );
+}
 
 function formatFileSize(bytes: number): string {
     if (bytes === 0) return '0 B';
@@ -179,6 +272,20 @@ function ActivityRow({ video, onClick }: { video: ActivityVideo; onClick: () => 
     );
 }
 
+function TopLabelRow({ label, occurrences, maxOccurrences }: { label: string; occurrences: number; maxOccurrences: number }) {
+    const percent = maxOccurrences > 0 ? (occurrences / maxOccurrences) * 100 : 0;
+
+    return (
+        <div className="flex flex-col gap-1.5 px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2">
+                <p className="truncate text-sm font-medium text-foreground">{label}</p>
+                <span className="shrink-0 text-xs text-muted-foreground-1">{occurrences.toLocaleString()}</span>
+            </div>
+            <Progress value={percent} />
+        </div>
+    );
+}
+
 export default function Dashboard() {
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -210,6 +317,8 @@ export default function Dashboard() {
         yaxis: { labels: { formatter: (v) => `${Math.round(v)}` } },
         tooltip: { theme: 'dark' },
     };
+
+    const suggestions = dashboard ? computeSuggestions(dashboard) : [];
 
     return (
         <AppLayout active="dashboard">
@@ -264,39 +373,58 @@ export default function Dashboard() {
                         />
                     </Card>
 
-                    {/* Safety spotlight: the account-wide signal the workspace dashboard can't show */}
-                    <Card className="mt-4">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <ShieldAlert className="size-5 text-red-600 dark:text-red-400" strokeWidth={1.75} />
-                                Safety spotlight
-                            </CardTitle>
-                            <CardDescription>
-                                {dashboard.safety_spotlight.threats_detected + dashboard.safety_spotlight.flagged_moderation > 0
-                                    ? `${dashboard.safety_spotlight.threats_detected} threat${dashboard.safety_spotlight.threats_detected === 1 ? '' : 's'} · ${dashboard.safety_spotlight.flagged_moderation} moderation flag${dashboard.safety_spotlight.flagged_moderation === 1 ? '' : 's'}, across all workspaces`
-                                    : 'Videos worth a human look, across all workspaces'}
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="flex flex-col gap-1 pt-0">
-                            {dashboard.safety_spotlight.items.length === 0 ? (
-                                <div className="flex flex-col items-center gap-2 py-8 text-center">
-                                    <CheckCircle2 className="size-6 text-green-600 dark:text-green-400" strokeWidth={1.75} />
-                                    <p className="text-sm text-muted-foreground-1">No threats or moderation flags right now.</p>
-                                </div>
-                            ) : (
-                                dashboard.safety_spotlight.items.map((item) => (
-                                    <SpotlightRow
-                                        key={`${item.type}-${item.video_id}`}
-                                        item={item}
-                                        onClick={() => navigate(`/videos/${item.video_id}/results`)}
-                                    />
-                                ))
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* Workspace comparison + recent activity, as lists rather than more charts */}
+                    {/* Suggestions + safety spotlight, side by side */}
                     <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Lightbulb className="size-5 text-primary" strokeWidth={1.75} />
+                                    Suggestions
+                                </CardTitle>
+                                <CardDescription>Quick tips based on your account</CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex flex-col gap-2 pt-0">
+                                {suggestions.length === 0 ? (
+                                    <p className="py-8 text-center text-sm text-muted-foreground-1">Nothing to flag right now.</p>
+                                ) : (
+                                    suggestions.map((suggestion) => <SuggestionBox key={suggestion.text} suggestion={suggestion} />)
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <ShieldAlert className="size-5 text-red-600 dark:text-red-400" strokeWidth={1.75} />
+                                    Safety spotlight
+                                </CardTitle>
+                                <CardDescription>
+                                    {dashboard.safety_spotlight.threats_detected + dashboard.safety_spotlight.flagged_moderation > 0
+                                        ? `${dashboard.safety_spotlight.threats_detected} threat${dashboard.safety_spotlight.threats_detected === 1 ? '' : 's'} · ${dashboard.safety_spotlight.flagged_moderation} moderation flag${dashboard.safety_spotlight.flagged_moderation === 1 ? '' : 's'}, across all workspaces`
+                                        : 'Videos worth a human look, across all workspaces'}
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex flex-col gap-1 pt-0">
+                                {dashboard.safety_spotlight.items.length === 0 ? (
+                                    <div className="flex flex-col items-center gap-2 py-8 text-center">
+                                        <CheckCircle2 className="size-6 text-green-600 dark:text-green-400" strokeWidth={1.75} />
+                                        <p className="text-sm text-muted-foreground-1">No threats or moderation flags right now.</p>
+                                    </div>
+                                ) : (
+                                    dashboard.safety_spotlight.items.map((item) => (
+                                        <SpotlightRow
+                                            key={`${item.type}-${item.video_id}`}
+                                            item={item}
+                                            onClick={() => navigate(`/videos/${item.video_id}/results`)}
+                                        />
+                                    ))
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* Workspace comparison + recent activity + top labels, as lists rather than more charts */}
+                    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
                         <Card>
                             <CardHeader>
                                 <CardTitle>Workspaces</CardTitle>
@@ -325,6 +453,30 @@ export default function Dashboard() {
                                 ) : (
                                     dashboard.recent_activity.map((video) => (
                                         <ActivityRow key={video.id} video={video} onClick={() => navigate(`/videos/${video.id}/results`)} />
+                                    ))
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Tag className="size-5 text-primary" strokeWidth={1.75} />
+                                    Top detected labels
+                                </CardTitle>
+                                <CardDescription>Across all workspaces</CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex flex-col gap-1 pt-0">
+                                {dashboard.top_labels.length === 0 ? (
+                                    <p className="py-8 text-center text-sm text-muted-foreground-1">No detections yet.</p>
+                                ) : (
+                                    dashboard.top_labels.map((item) => (
+                                        <TopLabelRow
+                                            key={item.label}
+                                            label={item.label}
+                                            occurrences={item.occurrences}
+                                            maxOccurrences={dashboard.top_labels[0].occurrences}
+                                        />
                                     ))
                                 )}
                             </CardContent>

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Video\AnalyzeVideo;
 use App\Actions\Video\DeleteVideo;
 use App\Actions\Video\GenerateVideoInsights;
+use App\Actions\Video\GenerateVideoReport;
 use App\Actions\Video\ListVideos;
 use App\Actions\Video\ShowVideo;
 use App\Actions\Video\StreamVideo;
@@ -63,6 +64,19 @@ class VideoController extends Controller
     {
         try {
             return $streamVideo($request->user(), $video);
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function report(Request $request, Video $video, GenerateVideoReport $generateVideoReport)
+    {
+        try {
+            return $generateVideoReport($request->user(), $video);
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
         } catch (Throwable $e) {

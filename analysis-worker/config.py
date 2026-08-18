@@ -42,10 +42,10 @@ MAX_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = [5, 30, 120]
 STALE_IDLE_MS = 5 * 60 * 1000  # reclaim messages a crashed worker never acked
 
-# Threat detection has no dedicated Rekognition API - it reuses the same
-# label-detection call as object detection and filters down to these
-# (normalized: lowercase, spaces/slashes -> underscores). Edit freely if
-# Rekognition surfaces other threat-relevant labels worth tracking.
+# Threat detection has no dedicated Rekognition API. It combines two calls:
+# the same label-detection call object detection uses, filtered down to these
+# physical weapon/hazard objects (normalized: lowercase, spaces/slashes ->
+# underscores) ...
 THREAT_LABELS = {
     "weapon",
     "gun",
@@ -58,4 +58,16 @@ THREAT_LABELS = {
     "explosive",
     "fire",
     "smoke",
+}
+
+# ... plus Rekognition's content-moderation call, filtered to these violence
+# categories - label detection alone only sees physical objects, so an
+# unarmed physical fight has no weapon to detect and would otherwise be
+# missed entirely.
+THREAT_MODERATION_LABELS = {
+    "violence",
+    "graphic_violence",
+    "physical_violence",
+    "weapon_violence",
+    "weapons",
 }

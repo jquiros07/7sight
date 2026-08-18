@@ -14,6 +14,7 @@
 /.vscode
 /.zed
 /auth.json
+/docker/browsershot/node_modules
 /node_modules
 /public/build
 /public/fonts-manifest.dev.json

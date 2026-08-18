@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libonig-dev \
     unzip \
     git \
+    nodejs \
+    npm \
+    chromium \
     && docker-php-ext-install pdo_mysql mbstring bcmath gd zip opcache \
     && pecl install redis && docker-php-ext-enable redis \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -23,6 +26,12 @@ COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY docker/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Isolated from the frontend's package.json/node_modules (resources/, built by
+# the separate `build` stage below) - this only exists so Browsershot (PDF
+# report generation) has puppeteer-core to drive the system Chromium above.
+COPY docker/browsershot/package.json docker/browsershot/package.json
+RUN cd docker/browsershot && npm install --omit=dev
 
 EXPOSE 80
 

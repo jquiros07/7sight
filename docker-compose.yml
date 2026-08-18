@@ -5,6 +5,7 @@ x-app: &app
   volumes:
     - .:/var/www/html
     - vendor:/var/www/html/vendor
+    - browsershot-node-modules:/var/www/html/docker/browsershot/node_modules
   environment:
     DB_HOST: mysql
     DB_PORT: 3306
@@ -115,5 +116,6 @@ services:
 volumes:
   vendor:
   node_modules:
+  browsershot-node-modules:
   mysql-data:
   redis-data:

@@ -30,7 +30,14 @@ class ShowWorkspaceDashboard
     {
         $this->authorizeMembership($user, $workspace);
 
-        $videos = $workspace->videos()->with(['analysisJobs.results', 'insights'])->get();
+        $videos = $workspace->videos()
+            ->select(['id', 'workspace_id', 'status', 'size', 'created_at'])
+            ->with([
+                'analysisJobs:id,video_id,type,status,started_at,completed_at',
+                'analysisJobs.results:id,analysis_job_id,label,occurrences',
+                'insights:id,video_id,threat_assessment,moderation,created_at',
+            ])
+            ->get();
         $jobs = $videos->flatMap->analysisJobs;
 
         return [
