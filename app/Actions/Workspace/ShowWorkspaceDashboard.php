@@ -8,6 +8,7 @@ use App\Enums\VideoStatus;
 use App\Models\AnalysisJob;
 use App\Models\User;
 use App\Models\Video;
+use App\Models\VideoInsight;
 use App\Models\Workspace;
 use Illuminate\Support\Collection;
 
@@ -42,6 +43,8 @@ class ShowWorkspaceDashboard
                 'total_storage_bytes' => (int) $videos->sum('size'),
                 'completed_analyses' => $jobs->where('status', 'completed')->count(),
                 'processing_now' => $jobs->whereIn('status', ['pending', 'processing'])->count(),
+                'failed_jobs' => $jobs->where('status', 'failed')->count(),
+                'avg_processing_seconds' => $this->avgProcessingSeconds($jobs),
             ],
             'uploads_over_time' => $this->uploadsOverTime($videos),
             'videos_by_status' => $this->countsByValues(
@@ -54,6 +57,8 @@ class ShowWorkspaceDashboard
             ),
             'top_labels' => $this->topLabels($jobs),
             'insight_flags' => $this->insightFlags($videos),
+            'risk_level_breakdown' => $this->riskLevelBreakdown($videos),
+            'moderation_severity_breakdown' => $this->moderationSeverityBreakdown($videos),
         ];
     }
 
@@ -132,5 +137,56 @@ class ShowWorkspaceDashboard
             'threats_detected' => $threatsDetected,
             'flagged_moderation' => $flaggedModeration,
         ];
+    }
+
+    /**
+     * Each video's latest threat assessment, grouped by risk level. Videos
+     * with no threat assessment generated yet are excluded entirely, same
+     * "latest non-null value" rule as insightFlags().
+     *
+     * @param  Collection<int, Video>  $videos
+     * @return array<string, int>
+     */
+    private function riskLevelBreakdown(Collection $videos): array
+    {
+        $counts = $videos
+            ->map(fn (Video $video) => $video->insights->whereNotNull('threat_assessment')->sortByDesc('created_at')->first())
+            ->filter()
+            ->countBy(fn (VideoInsight $insight) => $insight->threat_assessment['risk_level'] ?? null);
+
+        return $this->countsByValues($counts, ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
+    }
+
+    /**
+     * Each video's latest moderation assessment, grouped by severity. Videos
+     * with no moderation assessment generated yet are excluded entirely.
+     *
+     * @param  Collection<int, Video>  $videos
+     * @return array<string, int>
+     */
+    private function moderationSeverityBreakdown(Collection $videos): array
+    {
+        $counts = $videos
+            ->map(fn (Video $video) => $video->insights->whereNotNull('moderation')->sortByDesc('created_at')->first())
+            ->filter()
+            ->countBy(fn (VideoInsight $insight) => $insight->moderation['severity'] ?? null);
+
+        return $this->countsByValues($counts, ['NONE', 'LOW', 'MEDIUM', 'HIGH']);
+    }
+
+    /**
+     * Average wall-clock time between a job starting and completing, across
+     * completed jobs that have both timestamps. Null when there's no data yet.
+     *
+     * @param  Collection<int, AnalysisJob>  $jobs
+     */
+    private function avgProcessingSeconds(Collection $jobs): ?int
+    {
+        $durations = $jobs
+            ->where('status', 'completed')
+            ->filter(fn (AnalysisJob $job) => $job->started_at && $job->completed_at)
+            ->map(fn (AnalysisJob $job) => $job->started_at->diffInSeconds($job->completed_at));
+
+        return $durations->isEmpty() ? null : (int) round($durations->avg());
     }
 }

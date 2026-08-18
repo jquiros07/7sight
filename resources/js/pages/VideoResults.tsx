@@ -2,29 +2,19 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { ApexOptions } from 'apexcharts';
 import { AppLayout } from '@/components/AppLayout';
-import { ChevronDown, ChevronLeft, Loader2, Sparkles } from 'lucide-react';
+import { ChevronLeft, Lightbulb, Loader2 } from 'lucide-react';
 import { buildTooltip, type IBuildTooltipHelperOptions, type IChartProps } from 'preline/helpers/apexcharts';
 import { varToColor } from 'preline/helpers/shared';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
 import { getErrorMessages } from '../lib/errors';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApexChart } from '@/components/ui/chart';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 type AnalysisJobType = 'object_detection' | 'threat_detection' | 'content_moderation' | 'ai_generated';
 type AnalysisJobStatus = 'pending' | 'processing' | 'completed' | 'failed';
-
-type InsightType = Exclude<AnalysisJobType, 'ai_generated'>;
-
-const INSIGHT_TYPE_OPTIONS: { value: InsightType | null; label: string }[] = [
-    { value: null, label: 'General (all types)' },
-    { value: 'object_detection', label: 'Object detection' },
-    { value: 'threat_detection', label: 'Threat detection' },
-    { value: 'content_moderation', label: 'Content moderation' },
-];
 
 type AnalysisResult = {
     id: number;
@@ -55,6 +45,7 @@ type VideoDetail = {
     duration_seconds: number | null;
     created_at: string;
     analysis_jobs: AnalysisJob[];
+    latest_insight: VideoInsightsResponse | null;
 };
 
 type DetectedObject = {
@@ -86,6 +77,8 @@ type ThreatAssessment = {
     evidence: ThreatEvidence[];
     summary: string;
     reasoning: string;
+    // Optional: insights generated before this field existed won't have it.
+    suggestions?: string[];
 };
 
 type ModerationStatus = 'SAFE' | 'REVIEW' | 'UNSAFE';
@@ -98,6 +91,8 @@ type ModerationAssessment = {
     timestamp: number | null;
     summary: string;
     reasoning: string;
+    // Optional: insights generated before this field existed won't have it.
+    suggestions?: string[];
 };
 
 type VideoInsightsResponse = {
@@ -276,6 +271,24 @@ function ObjectDetectionSection({ assessment }: { assessment: ObjectDetectionAss
     );
 }
 
+function SuggestionsList({ suggestions }: { suggestions: string[] }) {
+    if (suggestions.length === 0) return null;
+
+    return (
+        <div className="flex flex-col gap-2 rounded-lg bg-layer p-3">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground-1">
+                <Lightbulb className="size-3.5" strokeWidth={1.75} />
+                Suggestions
+            </div>
+            <ul className="list-disc space-y-1 pl-4 text-sm text-foreground">
+                {suggestions.map((suggestion) => (
+                    <li key={suggestion}>{suggestion}</li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+
 function ThreatAssessmentSection({ assessment }: { assessment: ThreatAssessment }) {
     return (
         <div className="flex flex-col gap-3 rounded-lg border border-layer-line p-4">
@@ -319,6 +332,8 @@ function ThreatAssessmentSection({ assessment }: { assessment: ThreatAssessment 
                     </table>
                 </div>
             )}
+
+            <SuggestionsList suggestions={assessment.suggestions ?? []} />
         </div>
     );
 }
@@ -345,61 +360,24 @@ function ModerationAssessmentSection({ assessment }: { assessment: ModerationAss
 
             <p className="text-sm text-foreground">{assessment.summary}</p>
             <p className="text-sm text-muted-foreground-1">{assessment.reasoning}</p>
+
+            <SuggestionsList suggestions={assessment.suggestions ?? []} />
         </div>
     );
 }
 
-function InsightsCard({
-    insights,
-    loading,
-    errors,
-    onGenerate,
-    onDismissError,
-}: {
-    insights: VideoInsightsResponse | null;
-    loading: boolean;
-    errors: string[];
-    onGenerate: (type: InsightType | null) => void;
-    onDismissError: () => void;
-}) {
+function InsightsCard({ insights }: { insights: VideoInsightsResponse | null }) {
     return (
         <Card>
             <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
                 <CardTitle className="text-base">AI insights</CardTitle>
-                <DropdownMenu>
-                    <DropdownMenuTrigger disabled={loading} className={buttonVariants('secondary')}>
-                        {loading ? 'Generating…' : insights ? 'Regenerate' : 'Generate insights'}
-                        <Sparkles className="size-4" strokeWidth={1.75} />
-                        <ChevronDown className="size-4" strokeWidth={1.75} />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuGroup>
-                            {INSIGHT_TYPE_OPTIONS.map((option) => (
-                                <DropdownMenuItem key={option.label} disabled={loading} onClick={() => onGenerate(option.value)}>
-                                    {option.label}
-                                </DropdownMenuItem>
-                            ))}
-                        </DropdownMenuGroup>
-                    </DropdownMenuContent>
-                </DropdownMenu>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-                {errors.length > 0 && (
-                    <Alert variant="destructive" onDismiss={onDismissError}>
-                        <AlertDescription>
-                            <ul className="list-disc space-y-1 pl-4">
-                                {errors.map((message) => (
-                                    <li key={message}>{message}</li>
-                                ))}
-                            </ul>
-                        </AlertDescription>
-                    </Alert>
-                )}
-
-                {!insights && errors.length === 0 && !loading && (
-                    <p className="text-sm text-muted-foreground-1">
-                        Ask AI to summarize this video's analysis results in plain language.
-                    </p>
+                {!insights && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground-1">
+                        <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
+                        AI insights aren't ready yet — this usually takes a few moments. Refresh the page to check.
+                    </div>
                 )}
 
                 {insights?.object_detection && <ObjectDetectionSection assessment={insights.object_detection} />}
@@ -483,32 +461,16 @@ export default function VideoResults() {
     const [loadError, setLoadError] = useState<string[]>([]);
 
     const [insights, setInsights] = useState<VideoInsightsResponse | null>(null);
-    const [insightsLoading, setInsightsLoading] = useState(false);
-    const [insightsErrors, setInsightsErrors] = useState<string[]>([]);
-
-    // The insights dropdown renders after `video` loads, which is after
-    // Router's pathname-based autoInit() already ran. Re-init once it exists.
-    useEffect(() => {
-        if (video) {
-            window.HSStaticMethods.autoInit();
-        }
-    }, [video]);
 
     useEffect(() => {
         api.get<VideoDetail>(`/api/videos/${id}`)
-            .then((res) => setVideo(res.data))
+            .then((res) => {
+                setVideo(res.data);
+                setInsights(res.data.latest_insight);
+            })
             .catch((err) => setLoadError(getErrorMessages(err)))
             .finally(() => setLoading(false));
     }, [id]);
-
-    function handleGenerateInsights(type: InsightType | null) {
-        setInsightsLoading(true);
-        setInsightsErrors([]);
-        api.post<VideoInsightsResponse>(`/api/videos/${id}/insights`, { type })
-            .then((res) => setInsights(res.data))
-            .catch((err) => setInsightsErrors(getErrorMessages(err)))
-            .finally(() => setInsightsLoading(false));
-    }
 
     // Only the latest job per analysis type — an older, superseded attempt from
     // a retry (e.g. after a failure) is dropped, same rule the video's overall
@@ -596,13 +558,7 @@ export default function VideoResults() {
 
                     {latestJobsByType.some((job) => job.status === 'completed') && (
                         <div className="mt-6">
-                            <InsightsCard
-                                insights={insights}
-                                loading={insightsLoading}
-                                errors={insightsErrors}
-                                onGenerate={handleGenerateInsights}
-                                onDismissError={() => setInsightsErrors([])}
-                            />
+                            <InsightsCard insights={insights} />
                         </div>
                     )}
 

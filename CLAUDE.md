@@ -36,6 +36,9 @@ whether something counts as a modifying action, treat it as one and ask.
   lives in single-purpose Action classes.
 - Always check linting and verify correct build. Run a quick test of the implementation before considering the task done but ask before running end-to-end test.
 
+### Database queries & ORM
+- Optimize every query using Eloquent ORM or the Query Builder. Select only the columns that are required, use eager loading to prevent N+1 queries, avoid unnecessary database calls, and use appropriate filtering, indexing, pagination, and aggregation strategies where applicable.
+
 ### Error handling
 - Wrap logic that can fail in `try/catch`.
 - In the `catch`, log the exception before handling or rethrowing

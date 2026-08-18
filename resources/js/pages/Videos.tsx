@@ -218,8 +218,8 @@ export default function Videos() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    function load() {
-        setLoading(true);
+    function load(options: { silent?: boolean } = {}) {
+        if (!options.silent) setLoading(true);
         api.get<PaginatedVideos>('/api/videos', {
             params: {
                 page,
@@ -240,7 +240,9 @@ export default function Videos() {
                 setListError([]);
             })
             .catch((err) => setListError(getErrorMessages(err)))
-            .finally(() => setLoading(false));
+            .finally(() => {
+                if (!options.silent) setLoading(false);
+            });
     }
 
     useEffect(() => {
@@ -276,7 +278,7 @@ export default function Videos() {
     // Poll while anything is analyzing so status badges update without a manual refresh.
     useEffect(() => {
         if (!hasProcessing) return;
-        const interval = setInterval(load, 5000);
+        const interval = setInterval(() => load({ silent: true }), 5000);
         return () => clearInterval(interval);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [hasProcessing]);
@@ -480,9 +482,7 @@ export default function Videos() {
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center justify-end gap-1">
-                                                    {(video.status === 'uploaded' ||
-                                                        video.status === 'ready' ||
-                                                        video.status === 'failed') && (
+                                                    {(video.status === 'failed' || video.status === 'uploaded') && (
                                                         <ActionButton
                                                             icon={<Sparkles className="size-4" strokeWidth={1.75} />}
                                                             label={analyzing ? 'Queuing…' : 'Analyze'}

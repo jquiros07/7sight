@@ -97,6 +97,24 @@ class VideoController extends Controller
         }
     }
 
+    /**
+     * Called internally by the analysis-worker once a video's analysis jobs
+     * all complete. Runs the full insights generation as the video's
+     * uploader, since there's no requesting user for this call.
+     */
+    public function generateInsights(Video $video, GenerateVideoInsights $generateVideoInsights)
+    {
+        try {
+            return response()->json($generateVideoInsights($video->uploader, $video));
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
     public function update(Request $request, Video $video, UpdateVideo $updateVideo)
     {
         try {

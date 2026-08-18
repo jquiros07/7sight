@@ -9,6 +9,7 @@ import Register from './pages/Register';
 import VerifyEmail from './pages/VerifyEmail';
 import VideoEdit from './pages/VideoEdit';
 import VideoResults from './pages/VideoResults';
+import VideoSearch from './pages/VideoSearch';
 import VideoUpload from './pages/VideoUpload';
 import Videos from './pages/Videos';
 import WorkspaceCreate from './pages/WorkspaceCreate';
@@ -73,6 +74,14 @@ export default function Router() {
                 element={
                     <RequireAuth>
                         <VideoResults />
+                    </RequireAuth>
+                }
+            />
+            <Route
+                path="/search"
+                element={
+                    <RequireAuth>
+                        <VideoSearch />
                     </RequireAuth>
                 }
             />

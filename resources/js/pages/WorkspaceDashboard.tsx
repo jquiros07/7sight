@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { ApexOptions } from 'apexcharts';
 import { AppLayout } from '@/components/AppLayout';
-import { CheckCircle2, ChevronLeft, Database, Loader2, ShieldAlert, ShieldQuestion, Video } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, Clock, Database, Loader2, ShieldAlert, ShieldQuestion, Video, XCircle } from 'lucide-react';
 import { cssVarToValue } from 'preline/helpers/apexcharts';
 import { api } from '../lib/api';
 import { getErrorMessages } from '../lib/errors';
@@ -18,12 +18,16 @@ type WorkspaceDashboardData = {
         total_storage_bytes: number;
         completed_analyses: number;
         processing_now: number;
+        failed_jobs: number;
+        avg_processing_seconds: number | null;
     };
     uploads_over_time: { date: string; count: number }[];
     videos_by_status: { uploaded: number; processing: number; ready: number; failed: number };
     jobs_by_type: { object_detection: number; threat_detection: number; content_moderation: number };
     top_labels: { label: string; occurrences: number }[];
     insight_flags: { threats_detected: number; flagged_moderation: number };
+    risk_level_breakdown: { LOW: number; MEDIUM: number; HIGH: number; CRITICAL: number };
+    moderation_severity_breakdown: { NONE: number; LOW: number; MEDIUM: number; HIGH: number };
 };
 
 function formatFileSize(bytes: number): string {
@@ -31,6 +35,14 @@ function formatFileSize(bytes: number): string {
     const units = ['B', 'KB', 'MB', 'GB'];
     const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
     return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function formatDurationShort(totalSeconds: number | null): string {
+    if (totalSeconds === null) return '—';
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = Math.round(totalSeconds % 60);
+    if (minutes === 0) return `${seconds}s`;
+    return `${minutes}m ${seconds}s`;
 }
 
 function formatChartDate(dateStr: string): string {
@@ -109,6 +121,24 @@ export default function WorkspaceDashboard() {
         tooltip: { theme: 'dark' },
     };
 
+    const riskLevelOptions: ApexOptions = {
+        chart: { fontFamily: 'inherit', foreColor: foregroundMuted },
+        labels: ['Low', 'Medium', 'High', 'Critical'],
+        colors: ['#22c55e', '#f59e0b', '#f97316', '#ef4444'],
+        legend: { position: 'bottom' },
+        dataLabels: { enabled: true, formatter: (v: number) => `${Math.round(v)}%` },
+        plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Assessed' } } } } },
+    };
+
+    const moderationSeverityOptions: ApexOptions = {
+        chart: { fontFamily: 'inherit', foreColor: foregroundMuted },
+        labels: ['None', 'Low', 'Medium', 'High'],
+        colors: ['#22c55e', primary, '#f59e0b', '#ef4444'],
+        legend: { position: 'bottom' },
+        dataLabels: { enabled: true, formatter: (v: number) => `${Math.round(v)}%` },
+        plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Assessed' } } } } },
+    };
+
     const topLabelsOptions: ApexOptions = {
         chart: { fontFamily: 'inherit', foreColor: foregroundMuted },
         colors: [primary],
@@ -179,6 +209,21 @@ export default function WorkspaceDashboard() {
                             value={dashboard.insight_flags.flagged_moderation}
                             caption="from generated AI insights"
                             tone={dashboard.insight_flags.flagged_moderation > 0 ? 'warning' : 'default'}
+                        />
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        <StatCard
+                            icon={<XCircle className="size-5" strokeWidth={1.75} />}
+                            label="Failed jobs"
+                            value={dashboard.stats.failed_jobs}
+                            tone={dashboard.stats.failed_jobs > 0 ? 'warning' : 'default'}
+                        />
+                        <StatCard
+                            icon={<Clock className="size-5" strokeWidth={1.75} />}
+                            label="Avg. processing time"
+                            value={formatDurationShort(dashboard.stats.avg_processing_seconds)}
+                            caption="per completed job"
                         />
                     </div>
 
@@ -259,6 +304,64 @@ export default function WorkspaceDashboard() {
                                     />
                                 ) : (
                                     <p className="py-10 text-center text-sm text-muted-foreground-1">No detections yet.</p>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Risk level breakdown</CardTitle>
+                                <CardDescription>Latest threat assessment per video</CardDescription>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                                {dashboard.risk_level_breakdown.LOW +
+                                    dashboard.risk_level_breakdown.MEDIUM +
+                                    dashboard.risk_level_breakdown.HIGH +
+                                    dashboard.risk_level_breakdown.CRITICAL >
+                                0 ? (
+                                    <ApexChart
+                                        type="donut"
+                                        height={300}
+                                        options={riskLevelOptions}
+                                        series={[
+                                            dashboard.risk_level_breakdown.LOW,
+                                            dashboard.risk_level_breakdown.MEDIUM,
+                                            dashboard.risk_level_breakdown.HIGH,
+                                            dashboard.risk_level_breakdown.CRITICAL,
+                                        ]}
+                                    />
+                                ) : (
+                                    <p className="py-10 text-center text-sm text-muted-foreground-1">No threat assessments yet.</p>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Moderation severity breakdown</CardTitle>
+                                <CardDescription>Latest moderation assessment per video</CardDescription>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                                {dashboard.moderation_severity_breakdown.NONE +
+                                    dashboard.moderation_severity_breakdown.LOW +
+                                    dashboard.moderation_severity_breakdown.MEDIUM +
+                                    dashboard.moderation_severity_breakdown.HIGH >
+                                0 ? (
+                                    <ApexChart
+                                        type="donut"
+                                        height={300}
+                                        options={moderationSeverityOptions}
+                                        series={[
+                                            dashboard.moderation_severity_breakdown.NONE,
+                                            dashboard.moderation_severity_breakdown.LOW,
+                                            dashboard.moderation_severity_breakdown.MEDIUM,
+                                            dashboard.moderation_severity_breakdown.HIGH,
+                                        ]}
+                                    />
+                                ) : (
+                                    <p className="py-10 text-center text-sm text-muted-foreground-1">No moderation assessments yet.</p>
                                 )}
                             </CardContent>
                         </Card>

@@ -48,6 +48,12 @@ class ContentModerationAgent implements Agent, HasStructuredOutput
                applicable (e.g. the video is clearly safe), leave it null.
             10. Provide a short, factual explanation of the assessment.
             11. Do not provide unnecessary graphic or explicit descriptions.
+            12. Provide a short list of concrete, actionable suggestions for a
+                human moderator based on this assessment (e.g. "restrict
+                distribution pending review", "no action needed"). Base
+                suggestions only on the status and severity above - do not
+                suggest actions the evidence doesn't support. Leave the list
+                empty if no action is warranted.
             INSTRUCTIONS;
     }
 
@@ -76,6 +82,10 @@ class ContentModerationAgent implements Agent, HasStructuredOutput
                 ->required(),
             'reasoning' => $schema->string()
                 ->description('A short, factual explanation of the assessment, without unnecessary graphic detail.')
+                ->required(),
+            'suggestions' => $schema->array()
+                ->items($schema->string())
+                ->description('Concrete, actionable suggestions for a human moderator based on this assessment. Empty if no action is warranted.')
                 ->required(),
         ];
     }

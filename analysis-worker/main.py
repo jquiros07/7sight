@@ -1,6 +1,8 @@
 import json
 import logging
 import time
+import urllib.error
+import urllib.request
 
 import sentry_sdk
 
@@ -59,6 +61,23 @@ def run_analysis(provider, job):
     raise ValueError(f"Unsupported analysis type: {job['type']}")
 
 
+def notify_insights_ready(video_id):
+    """Ask Laravel to generate AI insights now that every analysis type for
+    this video has completed. Best-effort: the analysis job itself already
+    succeeded, so a failure here is just logged/reported, not retried."""
+    url = f"{config.LARAVEL_INTERNAL_URL}/api/internal/videos/{video_id}/insights"
+    request = urllib.request.Request(
+        url, method="POST", headers={"X-Internal-Token": config.INTERNAL_API_TOKEN}
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            response.read()
+    except Exception as error:
+        logger.exception("video %s: failed to trigger insight generation", video_id)
+        sentry_sdk.capture_exception(error)
+
+
 def process(conn, provider, job_id):
     job = db.get_job(conn, job_id)
     if job is None:
@@ -80,7 +99,8 @@ def process(conn, provider, job_id):
             rows = aggregate_detections(detections)
             db.save_results(conn, job_id, rows)
             db.mark_completed(conn, job_id)
-            db.recompute_video_status(conn, job["video_id"])
+            if db.recompute_video_status(conn, job["video_id"]):
+                notify_insights_ready(job["video_id"])
             logger.info("job %s: completed with %s labels", job_id, len(rows))
             return
         except Exception as error:

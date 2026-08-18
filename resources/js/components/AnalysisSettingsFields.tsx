@@ -9,7 +9,7 @@ const ANALYSIS_TYPE_OPTIONS = [
 ] as const;
 
 const ANALYSIS_TYPE_SELECT_CONFIG = JSON.stringify({
-    placeholder: 'Select analysis types...',
+    placeholder: 'Select an analysis type...',
     toggleTag: '<button type="button" aria-expanded="false"></button>',
     toggleClasses:
         'hs-select-disabled:pointer-events-none hs-select-disabled:opacity-50 relative py-1.5 ps-3 pe-9 flex text-nowrap w-full cursor-pointer bg-layer border border-layer-line text-layer-foreground rounded-lg text-start text-sm hover:bg-layer-hover focus:outline-hidden focus:bg-layer-focus',
@@ -42,11 +42,11 @@ export function AnalysisSettingsFields({
                 <select
                     ref={analysisTypesRef}
                     id="video-analysis-types"
-                    multiple
                     data-hs-select={ANALYSIS_TYPE_SELECT_CONFIG}
-                    onChange={(e) => setAnalysisTypes(Array.from(e.target.selectedOptions, (option) => option.value))}
+                    onChange={(e) => setAnalysisTypes(e.target.value ? [e.target.value] : [])}
                     className="hidden"
                 >
+                    <option value=""></option>
                     {ANALYSIS_TYPE_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value} disabled={option.disabled}>
                             {option.label}

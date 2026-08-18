@@ -114,8 +114,14 @@ def recompute_video_status(conn, video_id):
     """Video is 'processing' while any job is pending/processing, 'failed' if the
     most recent job for any analysis type failed, otherwise 'ready' once every
     type's most recent job has completed. A retry's older, superseded attempt of
-    the same type is ignored so a later success can clear an earlier failure."""
+    the same type is ignored so a later success can clear an earlier failure.
+
+    Returns True if this call is what just moved the video into 'ready' (i.e.
+    it wasn't already ready), so the caller can fire a one-time notification."""
     with conn.cursor() as cursor:
+        cursor.execute("SELECT status FROM videos WHERE id = %s", (video_id,))
+        previous_status = cursor.fetchone()["status"]
+
         cursor.execute(
             """
             SELECT aj.status
@@ -142,3 +148,5 @@ def recompute_video_status(conn, video_id):
             "UPDATE videos SET status = %s, updated_at = %s WHERE id = %s",
             (status, now(), video_id),
         )
+
+        return status == "ready" and previous_status != "ready"

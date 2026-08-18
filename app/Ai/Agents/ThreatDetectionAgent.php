@@ -34,24 +34,40 @@ class ThreatDetectionAgent implements Agent, HasStructuredOutput
             security threat.
 
             Instructions:
-            1. Analyze the detected objects, their confidence scores, and timestamps.
-            2. Consider the temporal proximity of related detections.
-            3. Identify combinations of detections that could reasonably indicate a
+            1. Analyze the detected objects, their confidence scores, occurrence
+               counts, and timestamps.
+            2. Weigh evidence reliability, not just confidence score: a detection
+               with a low occurrence count (especially exactly 1) appearing in only
+               a single frame, with no corroborating detections nearby in time, is
+               weak evidence even if its confidence clears the collection threshold.
+               Do not assign MEDIUM risk or higher based solely on one isolated
+               detection.
+            3. Consider the temporal proximity of related detections - multiple
+               detections clustered close together in time are stronger evidence
+               than isolated ones.
+            4. Identify combinations of detections that could reasonably indicate a
                security threat.
-            4. Do not assume events that are not supported by the detections.
-            5. Do not claim that people are fighting, attacking, threatening, or using
+            5. Do not assume events that are not supported by the detections.
+            6. Do not claim that people are fighting, attacking, threatening, or using
                a weapon unless the available evidence supports that conclusion.
-            6. If the evidence is insufficient, say so, and set "threat_detected" to
-               false with a low "confidence".
-            7. Assign a risk level: LOW, MEDIUM, HIGH, or CRITICAL.
-            8. Provide a confidence score from 0 to 100 representing your confidence
+            7. If the evidence is insufficient - including a single isolated,
+               low-margin detection - say so, and set "threat_detected" to false with
+               a low "confidence" and a "risk_level" no higher than LOW.
+            8. Assign a risk level: LOW, MEDIUM, HIGH, or CRITICAL.
+            9. Provide a confidence score from 0 to 100 representing your confidence
                in the assessment.
-            9. Identify the single most relevant timestamp for the assessment.
-            10. List the specific detections that support your assessment as
+            10. Identify the single most relevant timestamp for the assessment.
+            11. List the specific detections that support your assessment as
                 "evidence" — each with its label, its original detection confidence,
                 and its timestamp. Do not invent detections that were not given to
                 you.
-            11. Provide a concise explanation of your reasoning.
+            12. Provide a concise explanation of your reasoning.
+            13. Provide a short list of concrete, actionable suggestions for a
+                human reviewer based on this assessment (e.g. "escalate to
+                security for manual review", "no action needed"). Base
+                suggestions only on the risk level and evidence above - do not
+                suggest actions the evidence doesn't support. Leave the list
+                empty if no action is warranted.
             INSTRUCTIONS;
     }
 
@@ -85,6 +101,10 @@ class ThreatDetectionAgent implements Agent, HasStructuredOutput
                 ->required(),
             'reasoning' => $schema->string()
                 ->description('A concise explanation of the reasoning behind the assessment.')
+                ->required(),
+            'suggestions' => $schema->array()
+                ->items($schema->string())
+                ->description('Concrete, actionable suggestions for a human reviewer based on this assessment. Empty if no action is warranted.')
                 ->required(),
         ];
     }

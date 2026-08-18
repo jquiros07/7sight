@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
@@ -72,5 +73,10 @@ class Video extends Model
     public function insights(): HasMany
     {
         return $this->hasMany(VideoInsight::class);
+    }
+
+    public function latestInsight(): HasOne
+    {
+        return $this->hasOne(VideoInsight::class)->latestOfMany();
     }
 }

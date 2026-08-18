@@ -12,6 +12,10 @@ use App\Models\User;
 use App\Models\Video;
 use App\Models\VideoInsight;
 use Illuminate\Support\Collection;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
+use Throwable;
 
 class GenerateVideoInsights
 {
@@ -29,7 +33,7 @@ class GenerateVideoInsights
     {
         $this->authorizeMembership($user, $video->workspace);
 
-        $video->loadMissing('analysisJobs.results');
+        $video->loadMissing('analysisJobs.results', 'latestInsight');
 
         $jobs = $this->latestCompletedJobsByType($video);
 
@@ -52,24 +56,30 @@ class GenerateVideoInsights
             default => null,
         };
 
+        abort_if(
+            $this->alreadyUpToDate($video, $jobs, $wantsObjectDetection, $wantsThreatAssessment, $wantsModeration),
+            422,
+            'Insights for this video are already up to date.'
+        );
+
         $result = [
-            'object_detection' => (! $wantsObjectDetection || $objectDetectionJobs->isEmpty()) ? null : (new ObjectDetectionAgent)->prompt(
-                json_encode($this->buildPromptData($video, $objectDetectionJobs), JSON_PRETTY_PRINT)
-            )->toArray(),
+            'object_detection' => (! $wantsObjectDetection || $objectDetectionJobs->isEmpty()) ? null : $this->promptForInsights(
+                new ObjectDetectionAgent, $this->buildPromptData($video, $objectDetectionJobs)
+            ),
 
             // The threat assessment gets every job's data, not just the threat-detection
             // one, so it can correlate e.g. an object-detection "Person" label with a
             // threat-detection "Knife" label the same way a human analyst would - even
             // when threat detection is the only type explicitly requested.
-            'threat_assessment' => (! $wantsThreatAssessment || $threatJob === null) ? null : (new ThreatDetectionAgent)->prompt(
-                json_encode($this->buildPromptData($video, $jobs), JSON_PRETTY_PRINT)
-            )->toArray(),
+            'threat_assessment' => (! $wantsThreatAssessment || $threatJob === null) ? null : $this->promptForInsights(
+                new ThreatDetectionAgent, $this->buildPromptData($video, $jobs)
+            ),
 
             // Content moderation is a self-contained assessment (Rekognition's own
             // moderation API), so unlike threat detection it only needs its own results.
-            'moderation' => (! $wantsModeration || $moderationJob === null) ? null : (new ContentModerationAgent)->prompt(
-                json_encode($this->buildPromptData($video, collect([$moderationJob])), JSON_PRETTY_PRINT)
-            )->toArray(),
+            'moderation' => (! $wantsModeration || $moderationJob === null) ? null : $this->promptForInsights(
+                new ContentModerationAgent, $this->buildPromptData($video, collect([$moderationJob]))
+            ),
         ];
 
         VideoInsight::create([
@@ -79,6 +89,56 @@ class GenerateVideoInsights
         ]);
 
         return $result;
+    }
+
+    /**
+     * Prompt an insights agent, retrying with backoff if the AI provider rate
+     * limits the request or is temporarily overloaded - both transient and
+     * worth retrying, unlike e.g. an insufficient-credits failure.
+     *
+     * @return array<string, mixed>
+     */
+    private function promptForInsights(Agent $agent, array $data): array
+    {
+        return retry(
+            times: 3,
+            callback: fn () => $agent->prompt(json_encode($data, JSON_PRETTY_PRINT))->toArray(),
+            sleepMilliseconds: fn (int $attempt) => $attempt * 500,
+            when: fn (Throwable $e) => $e instanceof RateLimitedException || $e instanceof ProviderOverloadedException,
+        );
+    }
+
+    /**
+     * True if the video's latest insight already has every field this request
+     * wants, generated after the most recent completed analysis job - i.e.
+     * re-prompting the AI now would just repeat the same result. A field the
+     * last insight left null (never generated, or a type added since) still
+     * allows the request through.
+     *
+     * @param  Collection<int, AnalysisJob>  $jobs
+     */
+    private function alreadyUpToDate(
+        Video $video,
+        Collection $jobs,
+        bool $wantsObjectDetection,
+        bool $wantsThreatAssessment,
+        bool $wantsModeration,
+    ): bool {
+        $latestInsight = $video->latestInsight;
+
+        if ($latestInsight === null) {
+            return false;
+        }
+
+        $latestJobCompletedAt = $jobs->max('completed_at');
+
+        if ($latestJobCompletedAt !== null && $latestInsight->created_at->lt($latestJobCompletedAt)) {
+            return false;
+        }
+
+        return (! $wantsObjectDetection || $latestInsight->object_detection !== null)
+            && (! $wantsThreatAssessment || $latestInsight->threat_assessment !== null)
+            && (! $wantsModeration || $latestInsight->moderation !== null);
     }
 
     /**

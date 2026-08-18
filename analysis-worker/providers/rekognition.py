@@ -21,15 +21,22 @@ class RekognitionProvider(AnalysisProvider):
         self._rekognition = boto3.client("rekognition", region_name=config.AWS_DEFAULT_REGION)
 
     def detect_objects(self, video_path: str) -> list[Detection]:
-        return self._run(video_path, self._rekognition.start_label_detection, self._collect_labels)
+        return self._run(
+            video_path,
+            self._rekognition.start_label_detection,
+            self._collect_labels,
+            MinConfidence=config.REKOGNITION_MIN_CONFIDENCE,
+        )
 
     def moderate_content(self, video_path: str) -> list[Detection]:
         return self._run(video_path, self._rekognition.start_content_moderation, self._collect_moderation_labels)
 
-    def _run(self, video_path, start_fn, collect_fn) -> list[Detection]:
+    def _run(self, video_path, start_fn, collect_fn, **start_kwargs) -> list[Detection]:
         s3_key = self._upload_scratch_copy(video_path)
         try:
-            job_id = start_fn(Video={"S3Object": {"Bucket": config.AWS_BUCKET, "Name": s3_key}})["JobId"]
+            job_id = start_fn(
+                Video={"S3Object": {"Bucket": config.AWS_BUCKET, "Name": s3_key}}, **start_kwargs
+            )["JobId"]
             return collect_fn(job_id)
         finally:
             self._s3.delete_object(Bucket=config.AWS_BUCKET, Key=s3_key)

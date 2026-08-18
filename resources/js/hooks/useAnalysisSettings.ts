@@ -54,7 +54,9 @@ export function useAnalysisSettings() {
     // a loading screen), call syncSelectVisual() once it appears to sync the
     // uncontrolled Preline widget — it won't pick up React state on its own.
     function hydrate(data: HydratableAnalysisSettingsData) {
-        setAnalysisTypes(data.analysis_types ?? []);
+        // Only one type can be selected now; older data saved with several
+        // (or a legacy video saved with none) is truncated to just the first.
+        setAnalysisTypes((data.analysis_types ?? []).slice(0, 1));
         setAutoStartAnalysis(data.auto_start_analysis ?? false);
         setObjectMode(data.analysis_config?.object_detection?.mode ?? 'all');
         setSelectedObjects(data.analysis_config?.object_detection?.objects ?? []);
@@ -62,7 +64,7 @@ export function useAnalysisSettings() {
 
     function syncSelectVisual() {
         if (analysisTypesRef.current) {
-            HSSelect.getInstance(analysisTypesRef.current)?.setValue(analysisTypes);
+            HSSelect.getInstance(analysisTypesRef.current)?.setValue(analysisTypes[0] ?? '');
         }
     }
 
@@ -72,7 +74,7 @@ export function useAnalysisSettings() {
         setObjectMode('all');
         setSelectedObjects([]);
         if (analysisTypesRef.current) {
-            HSSelect.getInstance(analysisTypesRef.current)?.setValue([]);
+            HSSelect.getInstance(analysisTypesRef.current)?.setValue('');
         }
     }
 
