@@ -70,7 +70,7 @@ const iconProps = { className: 'size-5 shrink-0', strokeWidth: 1.75 };
 const NAV_ITEMS: { key: NavKey; label: string; icon: ReactNode; href?: string; soon?: boolean }[] = [
     { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard {...iconProps} />, href: '/dashboard' },
     { key: 'videos', label: 'Videos', icon: <Video {...iconProps} />, href: '/videos' },
-    { key: 'search', label: 'Search', icon: <Search {...iconProps} />, href: '/search' },
+    { key: 'search', label: 'AI Search', icon: <Search {...iconProps} />, href: '/search' },
     { key: 'workspaces', label: 'Workspaces', icon: <Folder {...iconProps} />, href: '/workspaces' },
 ];
 

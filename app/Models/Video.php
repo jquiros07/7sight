@@ -79,4 +79,9 @@ class Video extends Model
     {
         return $this->hasOne(VideoInsight::class)->latestOfMany();
     }
+
+    public function inquiries(): HasMany
+    {
+        return $this->hasMany(VideoInquiry::class);
+    }
 }

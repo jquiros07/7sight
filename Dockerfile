@@ -48,6 +48,7 @@ COPY composer.json composer.lock ./
 RUN composer install --no-interaction --no-scripts --no-autoloader
 
 COPY . .
+RUN mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/framework/testing storage/logs
 RUN composer dump-autoload --optimize
 
 # ---------------------------------------------------------------------------
@@ -71,5 +72,6 @@ COPY composer.json composer.lock ./
 RUN composer install --no-interaction --no-scripts --no-autoloader --no-dev --optimize-autoloader
 
 COPY . .
+RUN mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/framework/testing storage/logs
 RUN composer dump-autoload --optimize --no-dev
 COPY --from=build /app/public/build ./public/build

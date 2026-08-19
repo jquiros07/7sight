@@ -6,12 +6,15 @@ use App\Actions\Video\AnalyzeVideo;
 use App\Actions\Video\DeleteVideo;
 use App\Actions\Video\GenerateVideoInsights;
 use App\Actions\Video\GenerateVideoReport;
+use App\Actions\Video\InquireAboutVideo;
+use App\Actions\Video\ListVideoInquiries;
 use App\Actions\Video\ListVideos;
 use App\Actions\Video\ShowVideo;
 use App\Actions\Video\StreamVideo;
 use App\Actions\Video\UpdateVideo;
 use App\Actions\Video\UploadVideo;
 use App\Enums\AnalysisType;
+use App\Jobs\GenerateVideoInsightsJob;
 use App\Models\Video;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -113,15 +116,15 @@ class VideoController extends Controller
 
     /**
      * Called internally by the analysis-worker once a video's analysis jobs
-     * all complete. Runs the full insights generation as the video's
-     * uploader, since there's no requesting user for this call.
+     * all complete. Queues the full insights generation to run as the
+     * video's uploader, since there's no requesting user for this call.
      */
-    public function generateInsights(Video $video, GenerateVideoInsights $generateVideoInsights)
+    public function generateInsights(Video $video)
     {
         try {
-            return response()->json($generateVideoInsights($video->uploader, $video));
-        } catch (HttpException $e) {
-            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+            GenerateVideoInsightsJob::dispatch($video);
+
+            return response()->json(['message' => 'Insight generation queued.'], 202);
         } catch (Throwable $e) {
             report($e);
 
@@ -148,6 +151,34 @@ class VideoController extends Controller
     {
         try {
             return response()->json($analyzeVideo($request->user(), $video));
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function inquiries(Request $request, Video $video, ListVideoInquiries $listVideoInquiries)
+    {
+        try {
+            return response()->json($listVideoInquiries($request->user(), $video));
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function inquire(Request $request, Video $video, InquireAboutVideo $inquireAboutVideo)
+    {
+        try {
+            return response()->json($inquireAboutVideo($request->user(), $video, $request->all()), 201);
+        } catch (ValidationException $e) {
+            return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], $e->status);
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
         } catch (Throwable $e) {

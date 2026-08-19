@@ -56,6 +56,12 @@
         .overview-table td { border-bottom: none; padding: 2px 6px 2px 0; }
         .overview-table td:first-child { color: #71717a; width: 110px; }
         .job-block { margin-top: 14px; padding: 10px; border: 1px solid #e4e4e7; border-radius: 6px; page-break-inside: avoid; }
+        .bar-chart { margin-top: 8px; }
+        .bar-row { display: flex; align-items: center; margin-bottom: 5px; }
+        .bar-label { width: 130px; font-size: 10px; color: #3f3f46; padding-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .bar-track { flex: 1; background: #f4f4f5; border-radius: 4px; height: 14px; overflow: hidden; }
+        .bar-fill { background: #0891b2; height: 100%; border-radius: 4px; }
+        .bar-value { width: 30px; text-align: right; font-size: 10px; color: #71717a; padding-left: 8px; }
         .insight-block { margin-top: 10px; padding: 10px; border: 1px solid #e4e4e7; border-radius: 6px; }
         .suggestions { margin-top: 8px; padding: 8px; background: #f4f4f5; border-radius: 6px; }
         .suggestions ul, .observations ul { margin: 4px 0; padding-left: 16px; }
@@ -89,7 +95,9 @@
         <h2>AI insights</h2>
 
         @if ($insights->object_detection)
-            @php($assessment = $insights->object_detection)
+            @php
+                $assessment = $insights->object_detection;
+            @endphp
             <div class="insight-block">
                 <h3>Object detection</h3>
                 <p class="muted">
@@ -117,7 +125,9 @@
         @endif
 
         @if ($insights->threat_assessment)
-            @php($assessment = $insights->threat_assessment)
+            @php
+                $assessment = $insights->threat_assessment;
+            @endphp
             <div class="insight-block">
                 <h3>
                     Threat assessment
@@ -160,7 +170,9 @@
         @endif
 
         @if ($insights->moderation)
-            @php($assessment = $insights->moderation)
+            @php
+                $assessment = $insights->moderation;
+            @endphp
             <div class="insight-block">
                 <h3>
                     Content moderation
@@ -209,6 +221,23 @@
             @elseif ($job->results->isEmpty())
                 <p class="muted">No labels were detected.</p>
             @else
+                @if ($job->results->count() > 1)
+                    @php
+                        $chartResults = $job->results->sortByDesc('occurrences')->take(12)->values();
+                        $maxOccurrences = $chartResults->max('occurrences');
+                    @endphp
+                    <div class="bar-chart">
+                        @foreach ($chartResults as $result)
+                            <div class="bar-row">
+                                <div class="bar-label">{{ $result->label }}</div>
+                                <div class="bar-track">
+                                    <div class="bar-fill" style="width: {{ $maxOccurrences > 0 ? round($result->occurrences / $maxOccurrences * 100, 1) : 0 }}%;"></div>
+                                </div>
+                                <div class="bar-value">{{ $result->occurrences }}</div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
                 <table>
                     <thead>
                         <tr>

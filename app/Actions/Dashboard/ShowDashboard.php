@@ -50,6 +50,7 @@ class ShowDashboard
         $videos = Video::query()
             ->select(['id', 'workspace_id', 'title', 'status', 'size', 'created_at', 'updated_at'])
             ->whereIn('workspace_id', $workspaceIds)
+            ->withCount('inquiries')
             ->with(['insights:id,video_id,threat_assessment,moderation,created_at'])
             ->get();
 
@@ -63,6 +64,7 @@ class ShowDashboard
                 'failed_videos' => $videos->where('status', VideoStatus::Failed)->count(),
                 'processing_videos' => $videos->where('status', VideoStatus::Processing)->count(),
                 'stuck_processing_videos' => $this->stuckProcessingVideos($videos),
+                'total_inquiries' => (int) $videos->sum('inquiries_count'),
             ],
             'uploads_over_time' => $this->uploadsOverTime($videos),
             'safety_spotlight' => [

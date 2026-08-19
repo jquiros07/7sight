@@ -42,6 +42,11 @@ MAX_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = [5, 30, 120]
 STALE_IDLE_MS = 5 * 60 * 1000  # reclaim messages a crashed worker never acked
 
+# How many jobs one replica processes at once. Each job spends almost all its
+# time blocked waiting on Rekognition, not on CPU, so a replica can work on
+# several videos concurrently instead of one at a time.
+WORKER_CONCURRENCY = int(os.environ.get("WORKER_CONCURRENCY", "3"))
+
 # Threat detection has no dedicated Rekognition API. It combines two calls:
 # the same label-detection call object detection uses, filtered down to these
 # physical weapon/hazard objects (normalized: lowercase, spaces/slashes ->

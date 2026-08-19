@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Actions\Workspace\CreateWorkspace;
 use App\Actions\Workspace\DeleteWorkspace;
+use App\Actions\Workspace\InquireAboutWorkspace;
+use App\Actions\Workspace\ListWorkspaceInquiries;
 use App\Actions\Workspace\ListWorkspaces;
 use App\Actions\Workspace\ShowWorkspace;
 use App\Actions\Workspace\ShowWorkspaceDashboard;
@@ -57,6 +59,34 @@ class WorkspaceController extends Controller
     {
         try {
             return response()->json($showWorkspaceDashboard($request->user(), $workspace));
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function inquiries(Request $request, Workspace $workspace, ListWorkspaceInquiries $listWorkspaceInquiries)
+    {
+        try {
+            return response()->json($listWorkspaceInquiries($request->user(), $workspace));
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function inquire(Request $request, Workspace $workspace, InquireAboutWorkspace $inquireAboutWorkspace)
+    {
+        try {
+            return response()->json($inquireAboutWorkspace($request->user(), $workspace, $request->all()), 201);
+        } catch (ValidationException $e) {
+            return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], $e->status);
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
         } catch (Throwable $e) {

@@ -36,9 +36,18 @@ class AppServiceProvider extends ServiceProvider
 
         // --disable-dev-shm-usage works around Docker's default 64MB
         // /dev/shm, too small for Chrome's rendering needs.
+        //
+        // --disable-crash-reporter skips Chrome's crashpad handler entirely,
+        // which otherwise needs a writable database directory under $HOME
+        // and fails outright ("chrome_crashpad_handler: --database is
+        // required") if that path was created by a different container user
+        // first - $HOME=/tmp above is shared by every user in the
+        // container, so this collision isn't hypothetical. Not needed for a
+        // one-shot headless render anyway.
         $this->app->bind(PdfFactory::class, fn () => (new PdfFactory)->withBrowsershot(
             fn (Browsershot $browsershot) => $browsershot->setOption('args', [
                 '--disable-dev-shm-usage',
+                '--disable-crash-reporter',
             ])
         ));
     }

@@ -1,8 +1,8 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { FormEvent, useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { ApexOptions } from 'apexcharts';
 import { AppLayout } from '@/components/AppLayout';
-import { CheckCircle2, ChevronLeft, Clock, Database, Loader2, ShieldAlert, ShieldQuestion, Video, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, Clock, Database, HelpCircle, Loader2, ShieldAlert, ShieldQuestion, Sparkles, Video, XCircle } from 'lucide-react';
 import { cssVarToValue } from 'preline/helpers/apexcharts';
 import { api } from '../lib/api';
 import { getErrorMessages } from '../lib/errors';
@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApexChart } from '@/components/ui/chart';
+import { Input } from '@/components/ui/input';
 
 type WorkspaceDashboardData = {
     workspace: { id: number; name: string };
@@ -20,6 +21,8 @@ type WorkspaceDashboardData = {
         processing_now: number;
         failed_jobs: number;
         avg_processing_seconds: number | null;
+        total_inquiries: number;
+        unanswerable_inquiries: number;
     };
     uploads_over_time: { date: string; count: number }[];
     videos_by_status: { uploaded: number; processing: number; ready: number; failed: number };
@@ -28,6 +31,27 @@ type WorkspaceDashboardData = {
     insight_flags: { threats_detected: number; flagged_moderation: number };
     risk_level_breakdown: { LOW: number; MEDIUM: number; HIGH: number; CRITICAL: number };
     moderation_severity_breakdown: { NONE: number; LOW: number; MEDIUM: number; HIGH: number };
+};
+
+type WorkspaceInquiryCitation = {
+    video_id: number;
+    video_title: string;
+    note: string;
+};
+
+type WorkspaceInquiryAnswer = {
+    answerable: boolean;
+    answer: string;
+    confidence: number;
+    video_citations: WorkspaceInquiryCitation[];
+    caveats: string | null;
+};
+
+type WorkspaceInquiry = {
+    id: number;
+    question: string;
+    answer: WorkspaceInquiryAnswer;
+    created_at: string;
 };
 
 function formatFileSize(bytes: number): string {
@@ -67,6 +91,145 @@ function StatCard({ icon, label, value, caption, tone = 'default' }: { icon: Rea
                 <p className="text-2xl font-semibold text-foreground">{value}</p>
                 {caption && <p className="text-xs text-muted-foreground-2">{caption}</p>}
             </div>
+        </Card>
+    );
+}
+
+function WorkspaceInquiryAnswerCard({
+    inquiry,
+    onNavigateToVideo,
+}: {
+    inquiry: WorkspaceInquiry;
+    onNavigateToVideo: (videoId: number) => void;
+}) {
+    const { answer } = inquiry;
+
+    return (
+        <div className="flex flex-col gap-2 rounded-lg border border-layer-line p-4">
+            <p className="text-sm font-medium text-foreground">{inquiry.question}</p>
+
+            <div className="flex flex-wrap items-center gap-2">
+                {!answer.answerable && (
+                    <span className="inline-flex items-center rounded-full bg-layer px-2 py-0.5 text-xs font-medium text-muted-foreground-1">
+                        Not answerable from available data
+                    </span>
+                )}
+                <span className="text-xs text-muted-foreground-1">{answer.confidence}% confidence</span>
+            </div>
+
+            <p className="text-sm text-muted-foreground-1">{answer.answer}</p>
+
+            {answer.video_citations.length > 0 && (
+                <ul className="flex flex-col gap-1 text-xs">
+                    {answer.video_citations.map((citation) => (
+                        <li key={citation.video_id}>
+                            <button
+                                type="button"
+                                onClick={() => onNavigateToVideo(citation.video_id)}
+                                className="font-medium text-primary hover:underline"
+                            >
+                                {citation.video_title}
+                            </button>
+                            <span className="text-muted-foreground-1"> — {citation.note}</span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            {answer.caveats && <p className="text-xs text-muted-foreground-2 italic">{answer.caveats}</p>}
+        </div>
+    );
+}
+
+function WorkspaceInquireCard({ workspaceId }: { workspaceId: number }) {
+    const navigate = useNavigate();
+    const [question, setQuestion] = useState('');
+    const [history, setHistory] = useState<WorkspaceInquiry[]>([]);
+    const [loadingHistory, setLoadingHistory] = useState(true);
+    const [asking, setAsking] = useState(false);
+    const [error, setError] = useState<string[]>([]);
+
+    useEffect(() => {
+        api.get<WorkspaceInquiry[]>(`/api/workspaces/${workspaceId}/inquiries`)
+            .then((res) => setHistory(res.data))
+            .catch(() => setHistory([]))
+            .finally(() => setLoadingHistory(false));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [workspaceId]);
+
+    async function handleAsk(e: FormEvent) {
+        e.preventDefault();
+        if (!question.trim()) return;
+
+        setAsking(true);
+        setError([]);
+        try {
+            const res = await api.post<WorkspaceInquiry>(`/api/workspaces/${workspaceId}/inquiries`, { question });
+            setHistory((current) => [res.data, ...current]);
+            setQuestion('');
+        } catch (err) {
+            setError(getErrorMessages(err));
+        } finally {
+            setAsking(false);
+        }
+    }
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Inquire</CardTitle>
+                <CardDescription>Ask a question spanning every analyzed video in this workspace</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+                <form onSubmit={handleAsk} className="flex gap-2">
+                    <Input
+                        value={question}
+                        onChange={(e) => setQuestion(e.target.value)}
+                        placeholder="e.g. Which videos show unsafe content?"
+                        disabled={asking}
+                        aria-label="Ask a question about this workspace's videos"
+                    />
+                    <Button type="submit" disabled={asking || !question.trim()}>
+                        {asking ? (
+                            <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
+                        ) : (
+                            <Sparkles className="size-4" strokeWidth={1.75} />
+                        )}
+                        Ask
+                    </Button>
+                </form>
+
+                {error.length > 0 && (
+                    <Alert variant="destructive" onDismiss={() => setError([])}>
+                        <AlertDescription>
+                            <ul className="list-disc space-y-1 pl-4">
+                                {error.map((message) => (
+                                    <li key={message}>{message}</li>
+                                ))}
+                            </ul>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {loadingHistory && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground-1">
+                        <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
+                        Loading history…
+                    </div>
+                )}
+
+                {!loadingHistory && history.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                        {history.map((item) => (
+                            <WorkspaceInquiryAnswerCard
+                                key={item.id}
+                                inquiry={item}
+                                onNavigateToVideo={(videoId) => navigate(`/videos/${videoId}/results`)}
+                            />
+                        ))}
+                    </div>
+                )}
+            </CardContent>
         </Card>
     );
 }
@@ -168,7 +331,12 @@ export default function WorkspaceDashboard() {
                 </Alert>
             )}
 
-            {loading && <p className="mt-4 text-sm text-muted-foreground-1">Loading…</p>}
+            {loading && (
+                <div className="mt-10 flex flex-col items-center gap-2 text-center">
+                    <Loader2 className="size-6 animate-spin text-primary" strokeWidth={1.75} />
+                    <p className="text-sm text-muted-foreground-1">Loading…</p>
+                </div>
+            )}
 
             {!loading && dashboard && (
                 <>
@@ -209,6 +377,21 @@ export default function WorkspaceDashboard() {
                             value={dashboard.insight_flags.flagged_moderation}
                             caption="from generated AI insights"
                             tone={dashboard.insight_flags.flagged_moderation > 0 ? 'warning' : 'default'}
+                        />
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        <StatCard
+                            icon={<Sparkles className="size-5" strokeWidth={1.75} />}
+                            label="Inquiries asked"
+                            value={dashboard.stats.total_inquiries}
+                        />
+                        <StatCard
+                            icon={<HelpCircle className="size-5" strokeWidth={1.75} />}
+                            label="Unanswerable inquiries"
+                            value={dashboard.stats.unanswerable_inquiries}
+                            caption="not covered by available analysis"
+                            tone={dashboard.stats.unanswerable_inquiries > 0 ? 'warning' : 'default'}
                         />
                     </div>
 
@@ -365,6 +548,10 @@ export default function WorkspaceDashboard() {
                                 )}
                             </CardContent>
                         </Card>
+                    </div>
+
+                    <div className="mt-4">
+                        <WorkspaceInquireCard workspaceId={dashboard.workspace.id} />
                     </div>
                 </>
             )}

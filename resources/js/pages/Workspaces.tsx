@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
-import { LayoutDashboard, Pencil, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
+import { LayoutDashboard, Loader2, Pencil, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { HSOverlay } from 'preline';
 import { api } from '../lib/api';
 import { getErrorMessages } from '../lib/errors';
@@ -294,7 +294,10 @@ export default function Workspaces() {
                             {loading && (
                                 <tr>
                                     <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground-1">
-                                        Loading…
+                                        <div className="flex items-center justify-center gap-2">
+                                            <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
+                                            Loading…
+                                        </div>
                                     </td>
                                 </tr>
                             )}

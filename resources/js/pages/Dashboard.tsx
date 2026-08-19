@@ -12,6 +12,7 @@ import {
     Loader2,
     ShieldAlert,
     ShieldQuestion,
+    Sparkles,
     Tag,
     Video,
     XCircle,
@@ -62,6 +63,7 @@ type DashboardData = {
         failed_videos: number;
         processing_videos: number;
         stuck_processing_videos: number;
+        total_inquiries: number;
     };
     uploads_over_time: { date: string; count: number }[];
     safety_spotlight: {
@@ -343,7 +345,12 @@ export default function Dashboard() {
                 </Alert>
             )}
 
-            {loading && <p className="mt-4 text-sm text-muted-foreground-1">Loading…</p>}
+            {loading && (
+                <div className="mt-10 flex flex-col items-center gap-2 text-center">
+                    <Loader2 className="size-6 animate-spin text-primary" strokeWidth={1.75} />
+                    <p className="text-sm text-muted-foreground-1">Loading…</p>
+                </div>
+            )}
 
             {!loading && dashboard && dashboard.stats.total_workspaces === 0 && (
                 <Card className="mt-6 items-center gap-3 p-10 text-center">
@@ -370,6 +377,11 @@ export default function Dashboard() {
                             label="Failed videos"
                             value={String(dashboard.stats.failed_videos)}
                             tone={dashboard.stats.failed_videos > 0 ? 'warning' : 'default'}
+                        />
+                        <StatCell
+                            icon={<Sparkles className="size-5" strokeWidth={1.75} />}
+                            label="Inquiries asked"
+                            value={String(dashboard.stats.total_inquiries)}
                         />
                     </Card>
 

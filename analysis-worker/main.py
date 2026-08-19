@@ -3,6 +3,7 @@ import logging
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 import sentry_sdk
 
@@ -59,8 +60,14 @@ def run_analysis(provider, job):
         return filter_to_selected_objects(detections, analysis_config)
 
     if job["type"] == "threat_detection":
-        weapon_detections = filter_to_threat_labels(provider.detect_objects(video_path))
-        violence_detections = filter_to_threat_moderation_labels(provider.moderate_content(video_path))
+        # The two Rekognition calls are independent async jobs - run them
+        # concurrently instead of waiting for one to finish before starting
+        # the other, since each one's own poll loop is mostly idle waiting.
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            labels_future = executor.submit(provider.detect_objects, video_path)
+            moderation_future = executor.submit(provider.moderate_content, video_path)
+            weapon_detections = filter_to_threat_labels(labels_future.result())
+            violence_detections = filter_to_threat_moderation_labels(moderation_future.result())
         return weapon_detections + violence_detections
 
     if job["type"] == "content_moderation":
@@ -125,28 +132,45 @@ def process(conn, provider, job_id):
             time.sleep(config.RETRY_BACKOFF_SECONDS[attempts - 1])
 
 
+def process_and_ack(redis_client, provider, message_id, job_id):
+    """Run one job to completion on its own DB connection, then ack the
+    stream message. Each concurrent job needs its own connection since a
+    pymysql connection isn't safe to share across threads. Wrapped in a
+    catch-all because, unlike process()'s internal retry loop, an exception
+    here would otherwise be silently lost inside the thread pool."""
+    try:
+        conn = db.connect()
+        try:
+            process(conn, provider, job_id)
+        finally:
+            conn.close()
+        queue_stream.ack(redis_client, message_id)
+    except Exception as error:
+        logger.exception("job %s: unhandled error outside process()", job_id)
+        sentry_sdk.capture_exception(error)
+
+
 def main():
     redis_client = queue_stream.connect()
     queue_stream.ensure_group(redis_client)
-    conn = db.connect()
     provider = get_provider(config.ANALYSIS_PROVIDER)
 
     logger.info(
-        "analysis worker started (provider=%s, consumer=%s)",
+        "analysis worker started (provider=%s, consumer=%s, concurrency=%s)",
         config.ANALYSIS_PROVIDER,
         config.CONSUMER_NAME,
+        config.WORKER_CONCURRENCY,
     )
 
-    while True:
-        for message_id, fields in queue_stream.reclaim_stale(redis_client):
-            process(conn, provider, int(fields["job_id"]))
-            queue_stream.ack(redis_client, message_id)
+    with ThreadPoolExecutor(max_workers=config.WORKER_CONCURRENCY) as executor:
+        while True:
+            for message_id, fields in queue_stream.reclaim_stale(redis_client):
+                executor.submit(process_and_ack, redis_client, provider, message_id, int(fields["job_id"]))
 
-        message = queue_stream.read_one(redis_client)
-        if message:
-            message_id, fields = message
-            process(conn, provider, int(fields["job_id"]))
-            queue_stream.ack(redis_client, message_id)
+            message = queue_stream.read_one(redis_client)
+            if message:
+                message_id, fields = message
+                executor.submit(process_and_ack, redis_client, provider, message_id, int(fields["job_id"]))
 
 
 if __name__ == "__main__":

@@ -28,6 +28,10 @@ class UploadVideo
 
     private const DISK = 'local';
 
+    public function __construct(
+        private readonly AnalyzeVideo $analyzeVideo,
+    ) {}
+
     /**
      * Validate and store an uploaded video. Requires workspace membership.
      *
@@ -63,7 +67,7 @@ class UploadVideo
             throw ValidationException::withMessages(['file' => $errors]);
         }
 
-        return Video::create([
+        $video = Video::create([
             'workspace_id' => $workspace->id,
             'user_id' => $user->id,
             'title' => $validated['title'],
@@ -82,6 +86,12 @@ class UploadVideo
             'auto_start_analysis' => $validated['auto_start_analysis'] ?? false,
             'analysis_config' => $validated['analysis_config'] ?? [],
         ]);
+
+        if ($video->auto_start_analysis) {
+            $video = ($this->analyzeVideo)($user, $video);
+        }
+
+        return $video;
     }
 
     /**

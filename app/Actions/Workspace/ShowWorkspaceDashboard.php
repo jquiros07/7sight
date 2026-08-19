@@ -8,6 +8,7 @@ use App\Enums\VideoStatus;
 use App\Models\AnalysisJob;
 use App\Models\User;
 use App\Models\Video;
+use App\Models\VideoInquiry;
 use App\Models\VideoInsight;
 use App\Models\Workspace;
 use Illuminate\Support\Collection;
@@ -36,9 +37,11 @@ class ShowWorkspaceDashboard
                 'analysisJobs:id,video_id,type,status,started_at,completed_at',
                 'analysisJobs.results:id,analysis_job_id,label,occurrences',
                 'insights:id,video_id,threat_assessment,moderation,created_at',
+                'inquiries:id,video_id,answer',
             ])
             ->get();
         $jobs = $videos->flatMap->analysisJobs;
+        $inquiries = $videos->flatMap->inquiries;
 
         return [
             'workspace' => [
@@ -52,6 +55,8 @@ class ShowWorkspaceDashboard
                 'processing_now' => $jobs->whereIn('status', ['pending', 'processing'])->count(),
                 'failed_jobs' => $jobs->where('status', 'failed')->count(),
                 'avg_processing_seconds' => $this->avgProcessingSeconds($jobs),
+                'total_inquiries' => $inquiries->count(),
+                'unanswerable_inquiries' => $this->unanswerableInquiries($inquiries),
             ],
             'uploads_over_time' => $this->uploadsOverTime($videos),
             'videos_by_status' => $this->countsByValues(
@@ -179,6 +184,18 @@ class ShowWorkspaceDashboard
             ->countBy(fn (VideoInsight $insight) => $insight->moderation['severity'] ?? null);
 
         return $this->countsByValues($counts, ['NONE', 'LOW', 'MEDIUM', 'HIGH']);
+    }
+
+    /**
+     * How many Inquire questions the agent explicitly couldn't answer from
+     * the video's available detection data - a signal that more analysis
+     * types, or a different question, might be needed.
+     *
+     * @param  Collection<int, VideoInquiry>  $inquiries
+     */
+    private function unanswerableInquiries(Collection $inquiries): int
+    {
+        return $inquiries->filter(fn (VideoInquiry $inquiry) => ! ($inquiry->answer['answerable'] ?? true))->count();
     }
 
     /**

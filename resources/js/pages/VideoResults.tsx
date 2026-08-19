@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { ApexOptions } from 'apexcharts';
 import { AppLayout } from '@/components/AppLayout';
-import { ChevronLeft, Download, Lightbulb, Loader2 } from 'lucide-react';
+import { ChevronLeft, Download, Lightbulb, Loader2, PlayCircle, Sparkles } from 'lucide-react';
 import { buildTooltip, type IBuildTooltipHelperOptions, type IChartProps } from 'preline/helpers/apexcharts';
 import { varToColor } from 'preline/helpers/shared';
 import { api } from '../lib/api';
@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApexChart } from '@/components/ui/chart';
+import { Input } from '@/components/ui/input';
 
 type AnalysisJobType = 'object_detection' | 'threat_detection' | 'content_moderation' | 'ai_generated';
 type AnalysisJobStatus = 'pending' | 'processing' | 'completed' | 'failed';
@@ -101,6 +102,27 @@ type VideoInsightsResponse = {
     moderation: ModerationAssessment | null;
 };
 
+type InquiryEvidence = {
+    label: string;
+    timestamp: number | null;
+    note: string;
+};
+
+type VideoInquiryAnswer = {
+    answerable: boolean;
+    answer: string;
+    confidence: number;
+    evidence: InquiryEvidence[];
+    caveats: string | null;
+};
+
+type VideoInquiry = {
+    id: number;
+    question: string;
+    answer: VideoInquiryAnswer;
+    created_at: string;
+};
+
 const RISK_LEVEL_BADGES: Record<RiskLevel, string> = {
     LOW: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
     MEDIUM: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400',
@@ -156,6 +178,21 @@ function formatSeconds(value: string | number): string {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+// Every place evidence carries a timestamp renders it through this button
+// instead of plain text, so clicking any detection jumps the player to it.
+function TimestampButton({ seconds, onSeek }: { seconds: number; onSeek: (seconds: number) => void }) {
+    return (
+        <button
+            type="button"
+            onClick={() => onSeek(seconds)}
+            className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+        >
+            <PlayCircle className="size-3.5" strokeWidth={1.75} />
+            {formatSeconds(seconds)}
+        </button>
+    );
 }
 
 function formatDuration(totalSeconds: number | null): string {
@@ -247,14 +284,25 @@ function OccurrencesChart({ results }: { results: AnalysisResult[] }) {
     );
 }
 
-function ObjectDetectionSection({ assessment }: { assessment: ObjectDetectionAssessment }) {
+function ObjectDetectionSection({
+    assessment,
+    onSeek,
+}: {
+    assessment: ObjectDetectionAssessment;
+    onSeek: (seconds: number) => void;
+}) {
     return (
         <div className="flex flex-col gap-3 rounded-lg border border-layer-line p-4">
             <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium text-foreground">Object detection</span>
-                <span className="text-xs text-muted-foreground-1">
+                <span className="flex items-center gap-1 text-xs text-muted-foreground-1">
                     {assessment.confidence}% confidence
-                    {assessment.timestamp !== null && ` · at ${formatSeconds(assessment.timestamp)}`}
+                    {assessment.timestamp !== null && (
+                        <>
+                            {' '}
+                            · at <TimestampButton seconds={assessment.timestamp} onSeek={onSeek} />
+                        </>
+                    )}
                 </span>
             </div>
 
@@ -303,7 +351,7 @@ function SuggestionsList({ suggestions }: { suggestions: string[] }) {
     );
 }
 
-function ThreatAssessmentSection({ assessment }: { assessment: ThreatAssessment }) {
+function ThreatAssessmentSection({ assessment, onSeek }: { assessment: ThreatAssessment; onSeek: (seconds: number) => void }) {
     return (
         <div className="flex flex-col gap-3 rounded-lg border border-layer-line p-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -316,8 +364,8 @@ function ThreatAssessmentSection({ assessment }: { assessment: ThreatAssessment 
                 >
                     {assessment.risk_level}
                 </span>
-                <span className="text-xs text-muted-foreground-1">
-                    {assessment.confidence}% confidence · at {formatSeconds(assessment.timestamp)}
+                <span className="flex items-center gap-1 text-xs text-muted-foreground-1">
+                    {assessment.confidence}% confidence · at <TimestampButton seconds={assessment.timestamp} onSeek={onSeek} />
                 </span>
             </div>
 
@@ -339,7 +387,9 @@ function ThreatAssessmentSection({ assessment }: { assessment: ThreatAssessment 
                                 <tr key={`${item.label}-${item.timestamp}-${index}`}>
                                     <td className="py-2 pr-4 pl-3 font-medium text-foreground">{item.label}</td>
                                     <td className="py-2 pr-4 text-muted-foreground-1">{item.rekognition_confidence.toFixed(1)}%</td>
-                                    <td className="py-2 pr-3 text-muted-foreground-1">{formatSeconds(item.timestamp)}</td>
+                                    <td className="py-2 pr-3">
+                                        <TimestampButton seconds={item.timestamp} onSeek={onSeek} />
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -352,7 +402,13 @@ function ThreatAssessmentSection({ assessment }: { assessment: ThreatAssessment 
     );
 }
 
-function ModerationAssessmentSection({ assessment }: { assessment: ModerationAssessment }) {
+function ModerationAssessmentSection({
+    assessment,
+    onSeek,
+}: {
+    assessment: ModerationAssessment;
+    onSeek: (seconds: number) => void;
+}) {
     return (
         <div className="flex flex-col gap-3 rounded-lg border border-layer-line p-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -365,10 +421,15 @@ function ModerationAssessmentSection({ assessment }: { assessment: ModerationAss
                 >
                     {assessment.status}
                 </span>
-                <span className="text-xs text-muted-foreground-1">
+                <span className="flex items-center gap-1 text-xs text-muted-foreground-1">
                     {assessment.severity !== 'NONE' && `${assessment.severity} severity · `}
                     {assessment.confidence}% confidence
-                    {assessment.timestamp !== null && ` · at ${formatSeconds(assessment.timestamp)}`}
+                    {assessment.timestamp !== null && (
+                        <>
+                            {' '}
+                            · at <TimestampButton seconds={assessment.timestamp} onSeek={onSeek} />
+                        </>
+                    )}
                 </span>
             </div>
 
@@ -380,7 +441,13 @@ function ModerationAssessmentSection({ assessment }: { assessment: ModerationAss
     );
 }
 
-function InsightsCard({ insights }: { insights: VideoInsightsResponse | null }) {
+function InsightsCard({
+    insights,
+    onSeek,
+}: {
+    insights: VideoInsightsResponse | null;
+    onSeek: (seconds: number) => void;
+}) {
     return (
         <Card>
             <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
@@ -394,15 +461,143 @@ function InsightsCard({ insights }: { insights: VideoInsightsResponse | null }) 
                     </div>
                 )}
 
-                {insights?.object_detection && <ObjectDetectionSection assessment={insights.object_detection} />}
-                {insights?.threat_assessment && <ThreatAssessmentSection assessment={insights.threat_assessment} />}
-                {insights?.moderation && <ModerationAssessmentSection assessment={insights.moderation} />}
+                {insights?.object_detection && <ObjectDetectionSection assessment={insights.object_detection} onSeek={onSeek} />}
+                {insights?.threat_assessment && <ThreatAssessmentSection assessment={insights.threat_assessment} onSeek={onSeek} />}
+                {insights?.moderation && <ModerationAssessmentSection assessment={insights.moderation} onSeek={onSeek} />}
             </CardContent>
         </Card>
     );
 }
 
-function AnalysisJobCard({ job }: { job: AnalysisJob }) {
+function InquiryAnswer({ inquiry, onSeek }: { inquiry: VideoInquiry; onSeek: (seconds: number) => void }) {
+    const { answer } = inquiry;
+
+    return (
+        <div className="flex flex-col gap-2 rounded-lg border border-layer-line p-4">
+            <p className="text-sm font-medium text-foreground">{inquiry.question}</p>
+
+            <div className="flex flex-wrap items-center gap-2">
+                {!answer.answerable && (
+                    <span className="inline-flex items-center rounded-full bg-layer px-2 py-0.5 text-xs font-medium text-muted-foreground-1">
+                        Not answerable from available data
+                    </span>
+                )}
+                <span className="text-xs text-muted-foreground-1">{answer.confidence}% confidence</span>
+            </div>
+
+            <p className="text-sm text-muted-foreground-1">{answer.answer}</p>
+
+            {answer.evidence.length > 0 && (
+                <ul className="flex flex-col gap-1 text-xs text-muted-foreground-1">
+                    {answer.evidence.map((item, index) => (
+                        <li key={`${item.label}-${item.timestamp}-${index}`} className="flex flex-wrap items-center gap-1">
+                            <span className="font-medium text-foreground">{item.label}</span>
+                            {item.timestamp !== null && (
+                                <>
+                                    · at <TimestampButton seconds={item.timestamp} onSeek={onSeek} />
+                                </>
+                            )}
+                            <span>— {item.note}</span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            {answer.caveats && <p className="text-xs text-muted-foreground-2 italic">{answer.caveats}</p>}
+        </div>
+    );
+}
+
+function InquireCard({ videoId, onSeek }: { videoId: number; onSeek: (seconds: number) => void }) {
+    const [question, setQuestion] = useState('');
+    const [history, setHistory] = useState<VideoInquiry[]>([]);
+    const [loadingHistory, setLoadingHistory] = useState(true);
+    const [asking, setAsking] = useState(false);
+    const [error, setError] = useState<string[]>([]);
+
+    useEffect(() => {
+        api.get<VideoInquiry[]>(`/api/videos/${videoId}/inquiries`)
+            .then((res) => setHistory(res.data))
+            .catch(() => setHistory([]))
+            .finally(() => setLoadingHistory(false));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [videoId]);
+
+    async function handleAsk(e: FormEvent) {
+        e.preventDefault();
+        if (!question.trim()) return;
+
+        setAsking(true);
+        setError([]);
+        try {
+            const res = await api.post<VideoInquiry>(`/api/videos/${videoId}/inquiries`, { question });
+            setHistory((current) => [res.data, ...current]);
+            setQuestion('');
+        } catch (err) {
+            setError(getErrorMessages(err));
+        } finally {
+            setAsking(false);
+        }
+    }
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="text-base">Inquire</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+                <p className="text-sm text-muted-foreground-1">Ask a specific question about this video's detections.</p>
+
+                <form onSubmit={handleAsk} className="flex gap-2">
+                    <Input
+                        value={question}
+                        onChange={(e) => setQuestion(e.target.value)}
+                        placeholder="e.g. Was a weapon visible near the entrance?"
+                        disabled={asking}
+                        aria-label="Ask a question about this video"
+                    />
+                    <Button type="submit" disabled={asking || !question.trim()}>
+                        {asking ? (
+                            <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
+                        ) : (
+                            <Sparkles className="size-4" strokeWidth={1.75} />
+                        )}
+                        Ask
+                    </Button>
+                </form>
+
+                {error.length > 0 && (
+                    <Alert variant="destructive" onDismiss={() => setError([])}>
+                        <AlertDescription>
+                            <ul className="list-disc space-y-1 pl-4">
+                                {error.map((message) => (
+                                    <li key={message}>{message}</li>
+                                ))}
+                            </ul>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {loadingHistory && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground-1">
+                        <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
+                        Loading history…
+                    </div>
+                )}
+
+                {!loadingHistory && history.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                        {history.map((item) => (
+                            <InquiryAnswer key={item.id} inquiry={item} onSeek={onSeek} />
+                        ))}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+function AnalysisJobCard({ job, onSeek }: { job: AnalysisJob; onSeek: (seconds: number) => void }) {
     return (
         <Card>
             <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
@@ -453,8 +648,12 @@ function AnalysisJobCard({ job }: { job: AnalysisJob }) {
                                             <td className="py-2 pr-4 pl-3 font-medium text-foreground">{result.label}</td>
                                             <td className="py-2 pr-4 text-muted-foreground-1">{result.occurrences}</td>
                                             <td className="py-2 pr-4 text-muted-foreground-1">{result.avg_confidence.toFixed(1)}%</td>
-                                            <td className="py-2 pr-4 text-muted-foreground-1">{formatSeconds(result.first_seen_at)}</td>
-                                            <td className="py-2 pr-3 text-muted-foreground-1">{formatSeconds(result.last_seen_at)}</td>
+                                            <td className="py-2 pr-4">
+                                                <TimestampButton seconds={Number(result.first_seen_at)} onSeek={onSeek} />
+                                            </td>
+                                            <td className="py-2 pr-3">
+                                                <TimestampButton seconds={Number(result.last_seen_at)} onSeek={onSeek} />
+                                            </td>
                                         </tr>
                                     ))}
                             </tbody>
@@ -475,6 +674,14 @@ export default function VideoResults() {
     const [loadError, setLoadError] = useState<string[]>([]);
 
     const [insights, setInsights] = useState<VideoInsightsResponse | null>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
+
+    function seekTo(seconds: number) {
+        const el = videoRef.current;
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.currentTime = seconds;
+    }
 
     useEffect(() => {
         api.get<VideoDetail>(`/api/videos/${id}`)
@@ -518,7 +725,12 @@ export default function VideoResults() {
                 </Alert>
             )}
 
-            {loading && <p className="mt-4 text-sm text-muted-foreground-1">Loading…</p>}
+            {loading && (
+                <div className="mt-10 flex flex-col items-center gap-2 text-center">
+                    <Loader2 className="size-6 animate-spin text-primary" strokeWidth={1.75} />
+                    <p className="text-sm text-muted-foreground-1">Loading…</p>
+                </div>
+            )}
 
             {!loading && video && (
                 <>
@@ -535,6 +747,7 @@ export default function VideoResults() {
 
                     <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-3">
                         <video
+                            ref={videoRef}
                             controls
                             className="aspect-video w-full rounded-xl bg-black shadow-lg lg:col-span-2"
                             src={`/api/videos/${video.id}/stream`}
@@ -580,7 +793,13 @@ export default function VideoResults() {
 
                     {latestJobsByType.some((job) => job.status === 'completed') && (
                         <div className="mt-6">
-                            <InsightsCard insights={insights} />
+                            <InsightsCard insights={insights} onSeek={seekTo} />
+                        </div>
+                    )}
+
+                    {latestJobsByType.some((job) => job.status === 'completed') && (
+                        <div className="mt-6">
+                            <InquireCard videoId={video.id} onSeek={seekTo} />
                         </div>
                     )}
 
@@ -589,7 +808,7 @@ export default function VideoResults() {
                             <p className="text-sm text-muted-foreground-1">This video has no analysis jobs yet.</p>
                         )}
                         {latestJobsByType.map((job) => (
-                            <AnalysisJobCard key={job.id} job={job} />
+                            <AnalysisJobCard key={job.id} job={job} onSeek={seekTo} />
                         ))}
                     </div>
                 </>

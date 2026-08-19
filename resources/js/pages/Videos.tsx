@@ -298,7 +298,7 @@ export default function Videos() {
         setListError([]);
         try {
             await api.post(`/api/videos/${id}/analyze`);
-            load();
+            load({ silent: true });
         } catch (err) {
             setListError(getErrorMessages(err));
         } finally {
@@ -453,7 +453,10 @@ export default function Videos() {
                             {loading && (
                                 <tr>
                                     <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground-1">
-                                        Loading…
+                                        <div className="flex items-center justify-center gap-2">
+                                            <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
+                                            Loading…
+                                        </div>
                                     </td>
                                 </tr>
                             )}
