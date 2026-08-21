@@ -1,8 +1,8 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, memo, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { ApexOptions } from 'apexcharts';
 import { AppLayout } from '@/components/AppLayout';
-import { ChevronLeft, Download, Lightbulb, Loader2, PlayCircle, Sparkles } from 'lucide-react';
+import { BarChart3, ChevronLeft, Download, HelpCircle, Lightbulb, Loader2, PlayCircle, Sparkles } from 'lucide-react';
 import { buildTooltip, type IBuildTooltipHelperOptions, type IChartProps } from 'preline/helpers/apexcharts';
 import { varToColor } from 'preline/helpers/shared';
 import { api } from '../lib/api';
@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApexChart } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
 
-type AnalysisJobType = 'object_detection' | 'threat_detection' | 'content_moderation' | 'ai_generated';
+type AnalysisJobType = 'object_detection' | 'threat_detection' | 'content_moderation' | 'text_detection';
 type AnalysisJobStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
 type AnalysisResult = {
@@ -47,6 +47,7 @@ type VideoDetail = {
     created_at: string;
     analysis_jobs: AnalysisJob[];
     latest_insight: VideoInsightsResponse | null;
+    insights_failed_at: string | null;
 };
 
 type DetectedObject = {
@@ -59,6 +60,19 @@ type ObjectDetectionAssessment = {
     confidence: number;
     timestamp: number | null;
     objects: DetectedObject[];
+    notable_observations: string[];
+};
+
+type DetectedText = {
+    text: string;
+    occurrences: number;
+};
+
+type TextDetectionAssessment = {
+    summary: string;
+    confidence: number;
+    timestamp: number | null;
+    detected_text: DetectedText[];
     notable_observations: string[];
 };
 
@@ -100,6 +114,7 @@ type VideoInsightsResponse = {
     object_detection: ObjectDetectionAssessment | null;
     threat_assessment: ThreatAssessment | null;
     moderation: ModerationAssessment | null;
+    text_detection: TextDetectionAssessment | null;
 };
 
 type InquiryEvidence = {
@@ -114,6 +129,8 @@ type VideoInquiryAnswer = {
     confidence: number;
     evidence: InquiryEvidence[];
     caveats: string | null;
+    // Optional: inquiries answered before this field existed won't have it.
+    reasoning?: string;
 };
 
 type VideoInquiry = {
@@ -121,6 +138,12 @@ type VideoInquiry = {
     question: string;
     answer: VideoInquiryAnswer;
     created_at: string;
+};
+
+type PaginatedInquiries = {
+    data: VideoInquiry[];
+    current_page: number;
+    last_page: number;
 };
 
 const RISK_LEVEL_BADGES: Record<RiskLevel, string> = {
@@ -140,8 +163,23 @@ const TYPE_LABELS: Record<AnalysisJobType, string> = {
     object_detection: 'Object detection',
     threat_detection: 'Threat detection',
     content_moderation: 'Content moderation',
-    ai_generated: 'AI generated',
+    text_detection: 'Text detection',
 };
+
+// Tailored per analysis type so the suggestions shown actually have data
+// behind them - a threat-detection question is useless on a video that
+// never ran that analysis.
+const SUGGESTED_QUESTIONS_BY_TYPE: Partial<Record<AnalysisJobType, string[]>> = {
+    object_detection: ['What objects appear most frequently?', 'What happens at the very beginning of the video?'],
+    threat_detection: ['Was any threat detected in this video?', 'What is the riskiest moment in this video?'],
+    content_moderation: ['Is this video safe for all audiences?'],
+    text_detection: ['What text appears in this video?', 'Are there any signs or readable labels?'],
+};
+
+function suggestedQuestions(availableTypes: AnalysisJobType[]): string[] {
+    const suggestions = availableTypes.flatMap((type) => SUGGESTED_QUESTIONS_BY_TYPE[type] ?? []);
+    return suggestions.length > 0 ? suggestions : ['Summarize what happens in this video.'];
+}
 
 const JOB_STATUS_BADGES: Record<AnalysisJobStatus, { label: string; className: string; icon?: 'dot' | 'spinner' }> = {
     pending: { label: 'Queued', className: 'bg-layer text-muted-foreground-1', icon: 'dot' },
@@ -333,6 +371,55 @@ function ObjectDetectionSection({
     );
 }
 
+function TextDetectionSection({
+    assessment,
+    onSeek,
+}: {
+    assessment: TextDetectionAssessment;
+    onSeek: (seconds: number) => void;
+}) {
+    return (
+        <div className="flex flex-col gap-3 rounded-lg border border-layer-line p-4">
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-foreground">Text detection</span>
+                <span className="flex items-center gap-1 text-xs text-muted-foreground-1">
+                    {assessment.confidence}% confidence
+                    {assessment.timestamp !== null && (
+                        <>
+                            {' '}
+                            · at <TimestampButton seconds={assessment.timestamp} onSeek={onSeek} />
+                        </>
+                    )}
+                </span>
+            </div>
+
+            <p className="text-sm text-foreground">{assessment.summary}</p>
+
+            {assessment.detected_text.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                    {assessment.detected_text.map((item) => (
+                        <span
+                            key={item.text}
+                            className="inline-flex items-center gap-1 rounded-full bg-layer px-2.5 py-1 text-xs font-medium text-foreground"
+                        >
+                            "{item.text}"
+                            <span className="text-muted-foreground-1">× {item.occurrences}</span>
+                        </span>
+                    ))}
+                </div>
+            )}
+
+            {assessment.notable_observations.length > 0 && (
+                <ul className="list-disc space-y-1 pl-4 text-sm text-muted-foreground-1">
+                    {assessment.notable_observations.map((observation) => (
+                        <li key={observation}>{observation}</li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
+}
+
 function SuggestionsList({ suggestions }: { suggestions: string[] }) {
     if (suggestions.length === 0) return null;
 
@@ -442,26 +529,81 @@ function ModerationAssessmentSection({
 }
 
 function InsightsCard({
+    videoId,
     insights,
+    failedAt,
     onSeek,
+    onRetried,
 }: {
+    videoId: number;
     insights: VideoInsightsResponse | null;
+    failedAt: string | null;
     onSeek: (seconds: number) => void;
+    onRetried: (insights: VideoInsightsResponse) => void;
 }) {
+    const [retrying, setRetrying] = useState(false);
+    const [retryError, setRetryError] = useState<string[]>([]);
+
+    async function handleRetry() {
+        setRetrying(true);
+        setRetryError([]);
+        try {
+            const res = await api.post<VideoInsightsResponse>(`/api/videos/${videoId}/insights`);
+            onRetried(res.data);
+        } catch (err) {
+            setRetryError(getErrorMessages(err));
+        } finally {
+            setRetrying(false);
+        }
+    }
+
     return (
-        <Card>
+        <Card className="border-primary/30 bg-primary/[0.03]">
             <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
-                <CardTitle className="text-base">AI insights</CardTitle>
+                <CardTitle className="text-base">Insights</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-                {!insights && (
+                {!insights && !failedAt && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground-1">
                         <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
                         AI insights aren't ready yet — this usually takes a few moments. Refresh the page to check.
                     </div>
                 )}
 
+                {!insights && failedAt && (
+                    <Alert variant="destructive">
+                        <AlertDescription>
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <span>AI insight generation failed for this video.</span>
+                                <Button variant="secondary" disabled={retrying} onClick={handleRetry}>
+                                    {retrying ? (
+                                        <>
+                                            <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
+                                            Retrying…
+                                        </>
+                                    ) : (
+                                        'Retry'
+                                    )}
+                                </Button>
+                            </div>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {retryError.length > 0 && (
+                    <Alert variant="destructive" onDismiss={() => setRetryError([])}>
+                        <AlertDescription>
+                            <ul className="list-disc space-y-1 pl-4">
+                                {retryError.map((message) => (
+                                    <li key={message}>{message}</li>
+                                ))}
+                            </ul>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
                 {insights?.object_detection && <ObjectDetectionSection assessment={insights.object_detection} onSeek={onSeek} />}
+                {insights?.text_detection && <TextDetectionSection assessment={insights.text_detection} onSeek={onSeek} />}
                 {insights?.threat_assessment && <ThreatAssessmentSection assessment={insights.threat_assessment} onSeek={onSeek} />}
                 {insights?.moderation && <ModerationAssessmentSection assessment={insights.moderation} onSeek={onSeek} />}
             </CardContent>
@@ -469,11 +611,79 @@ function InsightsCard({
     );
 }
 
-function InquiryAnswer({ inquiry, onSeek }: { inquiry: VideoInquiry; onSeek: (seconds: number) => void }) {
+function EvidenceTable({ evidence, onSeek }: { evidence: InquiryEvidence[]; onSeek: (seconds: number) => void }) {
+    return (
+        <div className="max-h-72 overflow-auto rounded-lg border border-card-line">
+            <table className="w-full text-left text-sm">
+                <thead className="sticky top-0 border-b border-card-line bg-card">
+                    <tr>
+                        <th className="py-2 pr-4 pl-3 font-medium text-muted-foreground-1">Label</th>
+                        <th className="py-2 pr-4 font-medium text-muted-foreground-1">Note</th>
+                        <th className="py-2 pr-3 font-medium text-muted-foreground-1">Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-card-line">
+                    {evidence.map((item, index) => (
+                        <tr key={`${item.label}-${item.timestamp}-${index}`}>
+                            <td className="py-2 pr-4 pl-3 font-medium text-foreground">{item.label}</td>
+                            <td className="py-2 pr-4 text-muted-foreground-1">{item.note}</td>
+                            <td className="py-2 pr-3">
+                                {item.timestamp !== null ? (
+                                    <TimestampButton seconds={item.timestamp} onSeek={onSeek} />
+                                ) : (
+                                    <span className="text-muted-foreground-2">—</span>
+                                )}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+// Chronological reconstruction of the evidence - only entries with a
+// timestamp make sense on a timeline, unlike the full evidence table above.
+function InvestigationTimeline({ evidence, onSeek }: { evidence: InquiryEvidence[]; onSeek: (seconds: number) => void }) {
+    const timed = evidence
+        .filter((item): item is InquiryEvidence & { timestamp: number } => item.timestamp !== null)
+        .slice()
+        .sort((a, b) => a.timestamp - b.timestamp);
+
+    if (timed.length === 0) return null;
+
+    return (
+        <div className="flex flex-col gap-2">
+            <p className="text-xs font-medium text-muted-foreground-1">Investigation timeline</p>
+            <ol className="flex flex-col">
+                {timed.map((item, index) => (
+                    <li key={`${item.label}-${item.timestamp}-${index}`} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                            <span className="mt-1 size-2.5 shrink-0 rounded-full bg-primary" />
+                            {index < timed.length - 1 && <span className="w-px flex-1 bg-layer-line" />}
+                        </div>
+                        <div className="flex flex-col gap-0.5 pb-4">
+                            <TimestampButton seconds={item.timestamp} onSeek={onSeek} />
+                            <p className="text-sm text-foreground">
+                                <span className="font-medium">{item.label}</span>
+                                <span className="text-muted-foreground-1"> — {item.note}</span>
+                            </p>
+                        </div>
+                    </li>
+                ))}
+            </ol>
+        </div>
+    );
+}
+
+// Memoized so typing in the question input below (which changes state in the
+// parent InquireCard on every keystroke) doesn't re-render every past answer
+// in the history - each answer's evidence table/timeline can be sizeable.
+const InquiryAnswer = memo(function InquiryAnswer({ inquiry, onSeek }: { inquiry: VideoInquiry; onSeek: (seconds: number) => void }) {
     const { answer } = inquiry;
 
     return (
-        <div className="flex flex-col gap-2 rounded-lg border border-layer-line p-4">
+        <div className="flex flex-col gap-3 rounded-lg border border-layer-line p-4">
             <p className="text-sm font-medium text-foreground">{inquiry.question}</p>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -488,36 +698,55 @@ function InquiryAnswer({ inquiry, onSeek }: { inquiry: VideoInquiry; onSeek: (se
             <p className="text-sm text-muted-foreground-1">{answer.answer}</p>
 
             {answer.evidence.length > 0 && (
-                <ul className="flex flex-col gap-1 text-xs text-muted-foreground-1">
-                    {answer.evidence.map((item, index) => (
-                        <li key={`${item.label}-${item.timestamp}-${index}`} className="flex flex-wrap items-center gap-1">
-                            <span className="font-medium text-foreground">{item.label}</span>
-                            {item.timestamp !== null && (
-                                <>
-                                    · at <TimestampButton seconds={item.timestamp} onSeek={onSeek} />
-                                </>
-                            )}
-                            <span>— {item.note}</span>
-                        </li>
-                    ))}
-                </ul>
+                <div className="flex flex-col gap-1.5">
+                    <p className="text-xs font-medium text-muted-foreground-1">Evidence</p>
+                    <EvidenceTable evidence={answer.evidence} onSeek={onSeek} />
+                </div>
             )}
 
+            <InvestigationTimeline evidence={answer.evidence} onSeek={onSeek} />
+
             {answer.caveats && <p className="text-xs text-muted-foreground-2 italic">{answer.caveats}</p>}
+
+            {answer.reasoning && (
+                <div className="flex flex-col gap-1.5 rounded-lg bg-layer p-3">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground-1">
+                        <HelpCircle className="size-3.5" strokeWidth={1.75} />
+                        Why?
+                    </div>
+                    <p className="text-sm text-foreground">{answer.reasoning}</p>
+                </div>
+            )}
         </div>
     );
-}
+});
 
-function InquireCard({ videoId, onSeek }: { videoId: number; onSeek: (seconds: number) => void }) {
+function InquireCard({
+    videoId,
+    availableTypes,
+    onSeek,
+}: {
+    videoId: number;
+    availableTypes: AnalysisJobType[];
+    onSeek: (seconds: number) => void;
+}) {
     const [question, setQuestion] = useState('');
     const [history, setHistory] = useState<VideoInquiry[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(true);
+    const [page, setPage] = useState(1);
+    const [lastPage, setLastPage] = useState(1);
+    const [loadingOlder, setLoadingOlder] = useState(false);
     const [asking, setAsking] = useState(false);
     const [error, setError] = useState<string[]>([]);
+    const suggestions = suggestedQuestions(availableTypes);
 
     useEffect(() => {
-        api.get<VideoInquiry[]>(`/api/videos/${videoId}/inquiries`)
-            .then((res) => setHistory(res.data))
+        api.get<PaginatedInquiries>(`/api/videos/${videoId}/inquiries`)
+            .then((res) => {
+                setHistory(res.data.data);
+                setPage(res.data.current_page);
+                setLastPage(res.data.last_page);
+            })
             .catch(() => setHistory([]))
             .finally(() => setLoadingHistory(false));
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -540,13 +769,42 @@ function InquireCard({ videoId, onSeek }: { videoId: number; onSeek: (seconds: n
         }
     }
 
+    async function loadOlder() {
+        setLoadingOlder(true);
+        try {
+            const res = await api.get<PaginatedInquiries>(`/api/videos/${videoId}/inquiries`, { params: { page: page + 1 } });
+            setHistory((current) => [...current, ...res.data.data]);
+            setPage(res.data.current_page);
+            setLastPage(res.data.last_page);
+        } catch (err) {
+            setError(getErrorMessages(err));
+        } finally {
+            setLoadingOlder(false);
+        }
+    }
+
     return (
-        <Card>
+        <Card className="border-primary/30 bg-primary/[0.03]">
             <CardHeader>
                 <CardTitle className="text-base">Inquire</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
                 <p className="text-sm text-muted-foreground-1">Ask a specific question about this video's detections.</p>
+
+                {!loadingHistory && history.length === 0 && (
+                    <div className="flex flex-wrap gap-2">
+                        {suggestions.map((suggestion) => (
+                            <button
+                                key={suggestion}
+                                type="button"
+                                onClick={() => setQuestion(suggestion)}
+                                className="rounded-full border border-layer-line px-3 py-1 text-xs font-medium text-muted-foreground-1 hover:border-primary/50 hover:text-primary"
+                            >
+                                {suggestion}
+                            </button>
+                        ))}
+                    </div>
+                )}
 
                 <form onSubmit={handleAsk} className="flex gap-2">
                     <Input
@@ -558,11 +816,16 @@ function InquireCard({ videoId, onSeek }: { videoId: number; onSeek: (seconds: n
                     />
                     <Button type="submit" disabled={asking || !question.trim()}>
                         {asking ? (
-                            <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
+                            <>
+                                <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
+                                Thinking…
+                            </>
                         ) : (
-                            <Sparkles className="size-4" strokeWidth={1.75} />
+                            <>
+                                <Sparkles className="size-4" strokeWidth={1.75} />
+                                Ask
+                            </>
                         )}
-                        Ask
                     </Button>
                 </form>
 
@@ -585,11 +848,29 @@ function InquireCard({ videoId, onSeek }: { videoId: number; onSeek: (seconds: n
                     </div>
                 )}
 
-                {!loadingHistory && history.length > 0 && (
+                {(asking || (!loadingHistory && history.length > 0)) && (
                     <div className="flex flex-col gap-3">
+                        {asking && (
+                            <div className="flex items-center gap-2 rounded-lg border border-layer-line p-4 text-sm text-muted-foreground-1">
+                                <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
+                                Thinking…
+                            </div>
+                        )}
                         {history.map((item) => (
                             <InquiryAnswer key={item.id} inquiry={item} onSeek={onSeek} />
                         ))}
+                        {!loadingHistory && page < lastPage && (
+                            <Button variant="secondary" className="self-center" disabled={loadingOlder} onClick={loadOlder}>
+                                {loadingOlder ? (
+                                    <>
+                                        <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
+                                        Loading…
+                                    </>
+                                ) : (
+                                    'Load older…'
+                                )}
+                            </Button>
+                        )}
                     </div>
                 )}
             </CardContent>
@@ -793,23 +1074,46 @@ export default function VideoResults() {
 
                     {latestJobsByType.some((job) => job.status === 'completed') && (
                         <div className="mt-6">
-                            <InsightsCard insights={insights} onSeek={seekTo} />
+                            <div className="flex items-center gap-2 border-b border-layer-line pb-3">
+                                <Sparkles className="size-5 text-primary" strokeWidth={1.75} />
+                                <div>
+                                    <h2 className="font-heading text-xl font-medium text-foreground">AI</h2>
+                                    <p className="text-sm text-muted-foreground-1">AI-generated insights and Q&amp;A for this video</p>
+                                </div>
+                            </div>
+                            <div className="mt-4 flex flex-col gap-4">
+                                <InsightsCard
+                                    videoId={video.id}
+                                    insights={insights}
+                                    failedAt={video.insights_failed_at}
+                                    onSeek={seekTo}
+                                    onRetried={setInsights}
+                                />
+                                <InquireCard
+                                    videoId={video.id}
+                                    availableTypes={latestJobsByType.filter((job) => job.status === 'completed').map((job) => job.type)}
+                                    onSeek={seekTo}
+                                />
+                            </div>
                         </div>
                     )}
 
-                    {latestJobsByType.some((job) => job.status === 'completed') && (
-                        <div className="mt-6">
-                            <InquireCard videoId={video.id} onSeek={seekTo} />
+                    <div className="mt-6">
+                        <div className="flex items-center gap-2 border-b border-layer-line pb-3">
+                            <BarChart3 className="size-5 text-muted-foreground-1" strokeWidth={1.75} />
+                            <div>
+                                <h2 className="font-heading text-xl font-medium text-foreground">Analysis</h2>
+                                <p className="text-sm text-muted-foreground-1">Raw detection results per analysis type</p>
+                            </div>
                         </div>
-                    )}
-
-                    <div className="mt-6 flex flex-col gap-4">
-                        {latestJobsByType.length === 0 && (
-                            <p className="text-sm text-muted-foreground-1">This video has no analysis jobs yet.</p>
-                        )}
-                        {latestJobsByType.map((job) => (
-                            <AnalysisJobCard key={job.id} job={job} onSeek={seekTo} />
-                        ))}
+                        <div className="mt-4 flex flex-col gap-4">
+                            {latestJobsByType.length === 0 && (
+                                <p className="text-sm text-muted-foreground-1">This video has no analysis jobs yet.</p>
+                            )}
+                            {latestJobsByType.map((job) => (
+                                <AnalysisJobCard key={job.id} job={job} onSeek={seekTo} />
+                            ))}
+                        </div>
                     </div>
                 </>
             )}

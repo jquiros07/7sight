@@ -49,7 +49,10 @@ class VideoInquiryAgent implements Agent, HasStructuredOutput
             7. If there's an important caveat or limitation to your answer (e.g.
                the question asks about something no analysis type covers), state
                it in "caveats" - otherwise leave it null.
-            8. Do not invent detections, events, or details that aren't present in
+            8. Provide a concise explanation of the reasoning behind your answer -
+               how the evidence leads to that conclusion, not a restatement of the
+               answer itself.
+            9. Do not invent detections, events, or details that aren't present in
                the given data.
             INSTRUCTIONS;
     }
@@ -81,6 +84,9 @@ class VideoInquiryAgent implements Agent, HasStructuredOutput
             'caveats' => $schema->string()
                 ->nullable()
                 ->description('An important limitation or caveat about this answer, if any.')
+                ->required(),
+            'reasoning' => $schema->string()
+                ->description('A concise explanation of the reasoning behind the answer - how the evidence leads to that conclusion.')
                 ->required(),
         ];
     }

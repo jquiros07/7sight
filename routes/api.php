@@ -18,8 +18,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('workspaces', WorkspaceController::class);
     Route::get('/workspaces/{workspace}/dashboard', [WorkspaceController::class, 'dashboard']);
-    Route::get('/workspaces/{workspace}/inquiries', [WorkspaceController::class, 'inquiries']);
-    Route::post('/workspaces/{workspace}/inquiries', [WorkspaceController::class, 'inquire'])->middleware('throttle:10,1');
+    Route::post('/workspaces/{workspace}/insight-summary', [WorkspaceController::class, 'generateInsightSummary'])->middleware('throttle:10,1');
     Route::apiResource('videos', VideoController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
     Route::post('/videos/{video}/analyze', [VideoController::class, 'analyze'])->middleware('throttle:5,1');
     Route::get('/videos/{video}/stream', [VideoController::class, 'stream']);

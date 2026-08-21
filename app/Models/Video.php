@@ -52,6 +52,7 @@ class Video extends Model
             'analysis_types' => 'array',
             'auto_start_analysis' => 'boolean',
             'analysis_config' => 'array',
+            'insights_failed_at' => 'datetime',
         ];
     }
 

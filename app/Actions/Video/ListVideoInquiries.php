@@ -5,23 +5,25 @@ namespace App\Actions\Video;
 use App\Actions\Workspace\Concerns\AuthorizesWorkspaceAccess;
 use App\Models\User;
 use App\Models\Video;
-use App\Models\VideoInquiry;
-use Illuminate\Support\Collection;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class ListVideoInquiries
 {
     use AuthorizesWorkspaceAccess;
 
     /**
-     * List a video's past questions and answers, most recent first. Requires
+     * List a video's past questions and answers, most recent first, paginated
+     * so a long history doesn't have to be fetched all at once. Requires
      * workspace membership.
      *
-     * @return Collection<int, VideoInquiry>
+     * @param  array<string, mixed>  $params
      */
-    public function __invoke(User $user, Video $video): Collection
+    public function __invoke(User $user, Video $video, array $params = []): LengthAwarePaginator
     {
         $this->authorizeMembership($user, $video->workspace);
 
-        return $video->inquiries()->latest()->get();
+        $perPage = min((int) ($params['per_page'] ?? 5), 50) ?: 5;
+
+        return $video->inquiries()->latest()->paginate($perPage);
     }
 }

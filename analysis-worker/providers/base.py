@@ -24,3 +24,7 @@ class AnalysisProvider(ABC):
     @abstractmethod
     def moderate_content(self, video_path: str) -> list[Detection]:
         """Return every content-moderation label detected in the video."""
+
+    @abstractmethod
+    def detect_text(self, video_path: str) -> list[Detection]:
+        """Return every piece of on-screen text (OCR) detected in the video."""

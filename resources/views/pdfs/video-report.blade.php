@@ -3,7 +3,7 @@
         'object_detection' => 'Object detection',
         'threat_detection' => 'Threat detection',
         'content_moderation' => 'Content moderation',
-        'ai_generated' => 'AI generated',
+        'text_detection' => 'Text detection',
     ];
 
     $riskLevelColors = [
@@ -124,6 +124,36 @@
             </div>
         @endif
 
+        @if ($insights->text_detection)
+            @php
+                $assessment = $insights->text_detection;
+            @endphp
+            <div class="insight-block">
+                <h3>Text detection</h3>
+                <p class="muted">
+                    {{ $assessment['confidence'] }}% confidence
+                    @if ($assessment['timestamp'] !== null)
+                        · at {{ \App\Support\ReportFormatter::seconds($assessment['timestamp']) }}
+                    @endif
+                </p>
+                <p>{{ $assessment['summary'] }}</p>
+                @if (! empty($assessment['detected_text']))
+                    <p class="muted">
+                        {{ collect($assessment['detected_text'])->map(fn ($t) => "\"{$t['text']}\" × {$t['occurrences']}")->join(', ') }}
+                    </p>
+                @endif
+                @if (! empty($assessment['notable_observations']))
+                    <div class="observations">
+                        <ul>
+                            @foreach ($assessment['notable_observations'] as $observation)
+                                <li>{{ $observation }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+            </div>
+        @endif
+
         @if ($insights->threat_assessment)
             @php
                 $assessment = $insights->threat_assessment;
@@ -204,6 +234,51 @@
                 @endif
             </div>
         @endif
+    @endif
+
+    @if ($inquiries->isNotEmpty())
+        <h2>Inquire</h2>
+
+        @foreach ($inquiries as $inquiry)
+            <div class="insight-block">
+                <h3>{{ $inquiry->question }}</h3>
+                <p class="muted">
+                    @unless ($inquiry->answer['answerable'] ?? true)
+                        Not answerable from available data ·
+                    @endunless
+                    {{ $inquiry->answer['confidence'] }}% confidence
+                </p>
+                <p>{{ $inquiry->answer['answer'] }}</p>
+
+                @if (! empty($inquiry->answer['evidence']))
+                    <table>
+                        <thead>
+                            <tr><th>Label</th><th>Note</th><th>Timestamp</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($inquiry->answer['evidence'] as $item)
+                                <tr>
+                                    <td>{{ $item['label'] }}</td>
+                                    <td>{{ $item['note'] }}</td>
+                                    <td>{{ $item['timestamp'] !== null ? \App\Support\ReportFormatter::seconds($item['timestamp']) : '—' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @endif
+
+                @if (! empty($inquiry->answer['caveats']))
+                    <p class="muted">{{ $inquiry->answer['caveats'] }}</p>
+                @endif
+
+                @if (! empty($inquiry->answer['reasoning']))
+                    <div class="suggestions">
+                        <strong>Why?</strong>
+                        <p>{{ $inquiry->answer['reasoning'] }}</p>
+                    </div>
+                @endif
+            </div>
+        @endforeach
     @endif
 
     <h2>Analysis results</h2>

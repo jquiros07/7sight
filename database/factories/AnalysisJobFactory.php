@@ -21,7 +21,7 @@ class AnalysisJobFactory extends Factory
     {
         return [
             'video_id' => Video::factory(),
-            'type' => fake()->randomElement([AnalysisType::ObjectDetection, AnalysisType::ThreatDetection, AnalysisType::ContentModeration]),
+            'type' => fake()->randomElement([AnalysisType::ObjectDetection, AnalysisType::ThreatDetection, AnalysisType::ContentModeration, AnalysisType::TextDetection]),
             'status' => fake()->randomElement(['pending', 'processing', 'completed', 'failed']),
             'attempts' => 0,
             'external_job_id' => null,

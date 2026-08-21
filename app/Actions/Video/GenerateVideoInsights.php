@@ -6,6 +6,7 @@ use App\Actions\Video\Concerns\BuildsAnalysisPromptData;
 use App\Actions\Workspace\Concerns\AuthorizesWorkspaceAccess;
 use App\Ai\Agents\ContentModerationAgent;
 use App\Ai\Agents\ObjectDetectionAgent;
+use App\Ai\Agents\TextDetectionAgent;
 use App\Ai\Agents\ThreatDetectionAgent;
 use App\Enums\AnalysisType;
 use App\Models\AnalysisJob;
@@ -26,7 +27,7 @@ class GenerateVideoInsights
     /**
      * Ask the AI to summarize a video's analysis results. Requires workspace
      * membership. When $type is given, only that analysis type's insight is
-     * generated and the others are stored as null; otherwise all three are
+     * generated and the others are stored as null; otherwise all four are
      * generated together.
      *
      * @return array<string, mixed>
@@ -43,23 +44,24 @@ class GenerateVideoInsights
 
         $threatJob = $jobs->first(fn (AnalysisJob $job) => $job->type === AnalysisType::ThreatDetection);
         $moderationJob = $jobs->first(fn (AnalysisJob $job) => $job->type === AnalysisType::ContentModeration);
-        $objectDetectionJobs = $jobs->reject(
-            fn (AnalysisJob $job) => in_array($job->type, [AnalysisType::ThreatDetection, AnalysisType::ContentModeration], true)
-        );
+        $textDetectionJob = $jobs->first(fn (AnalysisJob $job) => $job->type === AnalysisType::TextDetection);
+        $objectDetectionJobs = $jobs->filter(fn (AnalysisJob $job) => $job->type === AnalysisType::ObjectDetection);
 
         $wantsObjectDetection = in_array($type, [null, AnalysisType::ObjectDetection], true);
         $wantsThreatAssessment = in_array($type, [null, AnalysisType::ThreatDetection], true);
         $wantsModeration = in_array($type, [null, AnalysisType::ContentModeration], true);
+        $wantsTextDetection = in_array($type, [null, AnalysisType::TextDetection], true);
 
         match ($type) {
             AnalysisType::ObjectDetection => abort_if($objectDetectionJobs->isEmpty(), 422, 'This video has no completed object detection analysis to generate insights from.'),
             AnalysisType::ThreatDetection => abort_if($threatJob === null, 422, 'This video has no completed threat detection analysis to generate insights from.'),
             AnalysisType::ContentModeration => abort_if($moderationJob === null, 422, 'This video has no completed content moderation analysis to generate insights from.'),
+            AnalysisType::TextDetection => abort_if($textDetectionJob === null, 422, 'This video has no completed text detection analysis to generate insights from.'),
             default => null,
         };
 
         abort_if(
-            $this->alreadyUpToDate($video, $jobs, $wantsObjectDetection, $wantsThreatAssessment, $wantsModeration),
+            $this->alreadyUpToDate($video, $jobs, $wantsObjectDetection, $wantsThreatAssessment, $wantsModeration, $wantsTextDetection),
             422,
             'Insights for this video are already up to date.'
         );
@@ -82,6 +84,10 @@ class GenerateVideoInsights
             'moderation' => (! $wantsModeration || $moderationJob === null) ? null : $this->promptForInsights(
                 new ContentModerationAgent, $this->buildAnalysisPromptData($video, collect([$moderationJob]))
             ),
+
+            'text_detection' => (! $wantsTextDetection || $textDetectionJob === null) ? null : $this->promptForInsights(
+                new TextDetectionAgent, $this->buildAnalysisPromptData($video, collect([$textDetectionJob]))
+            ),
         ];
 
         VideoInsight::create([
@@ -89,6 +95,10 @@ class GenerateVideoInsights
             'user_id' => $user->id,
             ...$result,
         ]);
+
+        if ($video->insights_failed_at !== null) {
+            $video->forceFill(['insights_failed_at' => null])->save();
+        }
 
         return $result;
     }
@@ -125,6 +135,7 @@ class GenerateVideoInsights
         bool $wantsObjectDetection,
         bool $wantsThreatAssessment,
         bool $wantsModeration,
+        bool $wantsTextDetection,
     ): bool {
         $latestInsight = $video->latestInsight;
 
@@ -140,6 +151,7 @@ class GenerateVideoInsights
 
         return (! $wantsObjectDetection || $latestInsight->object_detection !== null)
             && (! $wantsThreatAssessment || $latestInsight->threat_assessment !== null)
-            && (! $wantsModeration || $latestInsight->moderation !== null);
+            && (! $wantsModeration || $latestInsight->moderation !== null)
+            && (! $wantsTextDetection || $latestInsight->text_detection !== null);
     }
 }

@@ -8,6 +8,7 @@ use App\Models\AnalysisJob;
 use App\Models\User;
 use App\Models\Video;
 use Illuminate\Support\Facades\Redis;
+use Sentry\Tracing\SpanContext;
 
 class AnalyzeVideo
 {
@@ -42,12 +43,37 @@ class AnalyzeVideo
                 'status' => 'pending',
             ]);
 
-            Redis::connection('analysis_queue')->xadd(self::STREAM, '*', ['job_id' => $job->id]);
+            $this->publish($job);
         }
 
         $video->update(['status' => VideoStatus::Processing]);
 
         return $video->load('analysisJobs');
+    }
+
+    /**
+     * Push an analysis job onto the Redis Stream the Python worker consumes,
+     * wrapped in a Sentry `queue.publish` span so it shows up in Sentry's
+     * Queues dashboard. The current span's trace/baggage headers are
+     * attached to the message so the worker's `queue.process` span
+     * continues this same distributed trace instead of starting a new one.
+     */
+    private function publish(AnalysisJob $job): void
+    {
+        \Sentry\trace(function () use ($job) {
+            Redis::connection('analysis_queue')->xadd(self::STREAM, '*', [
+                'job_id' => $job->id,
+                'sentry_trace' => \Sentry\getTraceparent(),
+                'baggage' => \Sentry\getBaggage(),
+            ]);
+        }, (new SpanContext)
+            ->setOp('queue.publish')
+            ->setDescription(self::STREAM)
+            ->setData([
+                'messaging.message.id' => (string) $job->id,
+                'messaging.destination.name' => self::STREAM,
+                'messaging.message.body.size' => strlen((string) $job->id),
+            ]));
     }
 
     /**

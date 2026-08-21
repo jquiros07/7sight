@@ -16,20 +16,21 @@ class GenerateVideoReport
     use AuthorizesWorkspaceAccess;
 
     /**
-     * Render a downloadable PDF summary of a video's analysis and AI
-     * insights - the same data the video results page shows. Requires
-     * workspace membership.
+     * Render a downloadable PDF summary of a video's analysis, AI insights,
+     * and Inquire history - the same data the video results page shows.
+     * Requires workspace membership.
      */
     public function __invoke(User $user, Video $video): PdfBuilder
     {
         $this->authorizeMembership($user, $video->workspace);
 
-        $video->loadMissing('analysisJobs.results', 'latestInsight', 'workspace');
+        $video->loadMissing('analysisJobs.results', 'latestInsight', 'workspace', 'inquiries');
 
         return Pdf::view('pdfs.video-report', [
             'video' => $video,
             'jobs' => $this->latestJobsByType($video),
             'insights' => $video->latestInsight,
+            'inquiries' => $video->inquiries->sortByDesc('created_at')->values(),
             'generatedAt' => now(),
         ])
             ->format('a4')

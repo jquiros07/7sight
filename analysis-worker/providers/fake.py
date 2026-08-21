@@ -17,3 +17,9 @@ class FakeProvider(AnalysisProvider):
 
     def moderate_content(self, video_path: str) -> list[Detection]:
         return [Detection(label="Safe", confidence=99.9, timestamp_seconds=0.0)]
+
+    def detect_text(self, video_path: str) -> list[Detection]:
+        return [
+            Detection(label="EXIT", confidence=97.3, timestamp_seconds=0.0),
+            Detection(label="Open 24 Hours", confidence=92.1, timestamp_seconds=3.0),
+        ]

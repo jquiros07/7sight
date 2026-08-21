@@ -49,6 +49,7 @@ class InquireAboutVideo
                 'object_detection' => $video->latestInsight?->object_detection,
                 'threat_assessment' => $video->latestInsight?->threat_assessment,
                 'moderation' => $video->latestInsight?->moderation,
+                'text_detection' => $video->latestInsight?->text_detection,
             ],
         ];
 

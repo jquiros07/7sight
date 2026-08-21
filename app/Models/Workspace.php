@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable(['name', 'slug', 'description', 'owner_id'])]
@@ -48,8 +49,13 @@ class Workspace extends Model
         return $this->hasMany(Video::class);
     }
 
-    public function inquiries(): HasMany
+    public function insightSummaries(): HasMany
     {
-        return $this->hasMany(WorkspaceInquiry::class);
+        return $this->hasMany(WorkspaceInsightSummary::class);
+    }
+
+    public function latestInsightSummary(): HasOne
+    {
+        return $this->hasOne(WorkspaceInsightSummary::class)->latestOfMany();
     }
 }

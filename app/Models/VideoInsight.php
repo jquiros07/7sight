@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'object_detection',
     'threat_assessment',
     'moderation',
+    'text_detection',
 ])]
 class VideoInsight extends Model
 {
@@ -24,6 +25,7 @@ class VideoInsight extends Model
             'object_detection' => 'array',
             'threat_assessment' => 'array',
             'moderation' => 'array',
+            'text_detection' => 'array',
         ];
     }
 

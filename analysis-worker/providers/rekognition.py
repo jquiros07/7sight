@@ -31,6 +31,14 @@ class RekognitionProvider(AnalysisProvider):
     def moderate_content(self, video_path: str) -> list[Detection]:
         return self._run(video_path, self._rekognition.start_content_moderation, self._collect_moderation_labels)
 
+    def detect_text(self, video_path: str) -> list[Detection]:
+        return self._run(
+            video_path,
+            self._rekognition.start_text_detection,
+            self._collect_text,
+            Filters={"WordFilter": {"MinConfidence": config.REKOGNITION_MIN_CONFIDENCE}},
+        )
+
     def _run(self, video_path, start_fn, collect_fn, **start_kwargs) -> list[Detection]:
         s3_key = self._upload_scratch_copy(video_path)
         try:
@@ -66,6 +74,22 @@ class RekognitionProvider(AnalysisProvider):
                 timestamp_seconds=item["Timestamp"] / 1000,
             )
             for item in items
+        ]
+
+    def _collect_text(self, job_id: str) -> list[Detection]:
+        # Rekognition returns both LINE and WORD-level detections for the same
+        # text - WORD is just a LINE broken into its individual words, so
+        # keeping both would double-count everything. LINE alone is the
+        # readable, deduplicated result.
+        items = self._poll(self._rekognition.get_text_detection, job_id, "TextDetections")
+        return [
+            Detection(
+                label=item["TextDetection"]["DetectedText"],
+                confidence=item["TextDetection"]["Confidence"],
+                timestamp_seconds=item["Timestamp"] / 1000,
+            )
+            for item in items
+            if item["TextDetection"]["Type"] == "LINE"
         ]
 
     def _poll(self, get_fn, job_id: str, result_key: str) -> list[dict]:

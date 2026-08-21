@@ -27,4 +27,14 @@ class GenerateVideoInsightsJob implements ShouldQueue
             throw $e;
         }
     }
+
+    /**
+     * Called once this job has exhausted every retry attempt. Records the
+     * failure on the video so the results page can show an error instead of
+     * "insights aren't ready yet" forever.
+     */
+    public function failed(?Throwable $exception): void
+    {
+        $this->video->forceFill(['insights_failed_at' => now()])->save();
+    }
 }

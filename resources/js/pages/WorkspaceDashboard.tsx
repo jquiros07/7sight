@@ -1,8 +1,8 @@
-import { FormEvent, useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { ApexOptions } from 'apexcharts';
 import { AppLayout } from '@/components/AppLayout';
-import { CheckCircle2, ChevronLeft, Clock, Database, HelpCircle, Loader2, ShieldAlert, ShieldQuestion, Sparkles, Video, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, Clock, Database, Loader2, ShieldAlert, ShieldQuestion, Sparkles, Video, XCircle } from 'lucide-react';
 import { cssVarToValue } from 'preline/helpers/apexcharts';
 import { api } from '../lib/api';
 import { getErrorMessages } from '../lib/errors';
@@ -10,10 +10,16 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApexChart } from '@/components/ui/chart';
-import { Input } from '@/components/ui/input';
+
+type WorkspaceInsightSummary = {
+    summary: string;
+    highlights: string[];
+    generated_at: string;
+};
 
 type WorkspaceDashboardData = {
     workspace: { id: number; name: string };
+    insight_summary: WorkspaceInsightSummary | null;
     stats: {
         total_videos: number;
         total_storage_bytes: number;
@@ -21,37 +27,14 @@ type WorkspaceDashboardData = {
         processing_now: number;
         failed_jobs: number;
         avg_processing_seconds: number | null;
-        total_inquiries: number;
-        unanswerable_inquiries: number;
     };
     uploads_over_time: { date: string; count: number }[];
     videos_by_status: { uploaded: number; processing: number; ready: number; failed: number };
-    jobs_by_type: { object_detection: number; threat_detection: number; content_moderation: number };
+    jobs_by_type: { object_detection: number; threat_detection: number; content_moderation: number; text_detection: number };
     top_labels: { label: string; occurrences: number }[];
     insight_flags: { threats_detected: number; flagged_moderation: number };
     risk_level_breakdown: { LOW: number; MEDIUM: number; HIGH: number; CRITICAL: number };
     moderation_severity_breakdown: { NONE: number; LOW: number; MEDIUM: number; HIGH: number };
-};
-
-type WorkspaceInquiryCitation = {
-    video_id: number;
-    video_title: string;
-    note: string;
-};
-
-type WorkspaceInquiryAnswer = {
-    answerable: boolean;
-    answer: string;
-    confidence: number;
-    video_citations: WorkspaceInquiryCitation[];
-    caveats: string | null;
-};
-
-type WorkspaceInquiry = {
-    id: number;
-    question: string;
-    answer: WorkspaceInquiryAnswer;
-    created_at: string;
 };
 
 function formatFileSize(bytes: number): string {
@@ -95,110 +78,45 @@ function StatCard({ icon, label, value, caption, tone = 'default' }: { icon: Rea
     );
 }
 
-function WorkspaceInquiryAnswerCard({
-    inquiry,
-    onNavigateToVideo,
-}: {
-    inquiry: WorkspaceInquiry;
-    onNavigateToVideo: (videoId: number) => void;
-}) {
-    const { answer } = inquiry;
-
-    return (
-        <div className="flex flex-col gap-2 rounded-lg border border-layer-line p-4">
-            <p className="text-sm font-medium text-foreground">{inquiry.question}</p>
-
-            <div className="flex flex-wrap items-center gap-2">
-                {!answer.answerable && (
-                    <span className="inline-flex items-center rounded-full bg-layer px-2 py-0.5 text-xs font-medium text-muted-foreground-1">
-                        Not answerable from available data
-                    </span>
-                )}
-                <span className="text-xs text-muted-foreground-1">{answer.confidence}% confidence</span>
-            </div>
-
-            <p className="text-sm text-muted-foreground-1">{answer.answer}</p>
-
-            {answer.video_citations.length > 0 && (
-                <ul className="flex flex-col gap-1 text-xs">
-                    {answer.video_citations.map((citation) => (
-                        <li key={citation.video_id}>
-                            <button
-                                type="button"
-                                onClick={() => onNavigateToVideo(citation.video_id)}
-                                className="font-medium text-primary hover:underline"
-                            >
-                                {citation.video_title}
-                            </button>
-                            <span className="text-muted-foreground-1"> — {citation.note}</span>
-                        </li>
-                    ))}
-                </ul>
-            )}
-
-            {answer.caveats && <p className="text-xs text-muted-foreground-2 italic">{answer.caveats}</p>}
-        </div>
-    );
-}
-
-function WorkspaceInquireCard({ workspaceId }: { workspaceId: number }) {
-    const navigate = useNavigate();
-    const [question, setQuestion] = useState('');
-    const [history, setHistory] = useState<WorkspaceInquiry[]>([]);
-    const [loadingHistory, setLoadingHistory] = useState(true);
-    const [asking, setAsking] = useState(false);
+function WorkspaceSummaryCard({ workspaceId, initialSummary }: { workspaceId: number; initialSummary: WorkspaceInsightSummary | null }) {
+    const [summary, setSummary] = useState<WorkspaceInsightSummary | null>(initialSummary);
+    const [generating, setGenerating] = useState(false);
     const [error, setError] = useState<string[]>([]);
 
-    useEffect(() => {
-        api.get<WorkspaceInquiry[]>(`/api/workspaces/${workspaceId}/inquiries`)
-            .then((res) => setHistory(res.data))
-            .catch(() => setHistory([]))
-            .finally(() => setLoadingHistory(false));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [workspaceId]);
-
-    async function handleAsk(e: FormEvent) {
-        e.preventDefault();
-        if (!question.trim()) return;
-
-        setAsking(true);
+    async function handleGenerate() {
+        setGenerating(true);
         setError([]);
         try {
-            const res = await api.post<WorkspaceInquiry>(`/api/workspaces/${workspaceId}/inquiries`, { question });
-            setHistory((current) => [res.data, ...current]);
-            setQuestion('');
+            const res = await api.post<WorkspaceInsightSummary>(`/api/workspaces/${workspaceId}/insight-summary`);
+            setSummary(res.data);
         } catch (err) {
             setError(getErrorMessages(err));
         } finally {
-            setAsking(false);
+            setGenerating(false);
         }
     }
 
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Inquire</CardTitle>
-                <CardDescription>Ask a question spanning every analyzed video in this workspace</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-                <form onSubmit={handleAsk} className="flex gap-2">
-                    <Input
-                        value={question}
-                        onChange={(e) => setQuestion(e.target.value)}
-                        placeholder="e.g. Which videos show unsafe content?"
-                        disabled={asking}
-                        aria-label="Ask a question about this workspace's videos"
-                    />
-                    <Button type="submit" disabled={asking || !question.trim()}>
-                        {asking ? (
+        <Card className="border-primary/30 bg-primary/[0.03]">
+            <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
+                <div className="flex items-center gap-2">
+                    <Sparkles className="size-4 text-primary" strokeWidth={1.75} />
+                    <CardTitle className="text-base">Workspace summary</CardTitle>
+                </div>
+                <Button variant="secondary" disabled={generating} onClick={handleGenerate}>
+                    {generating ? (
+                        <>
                             <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
-                        ) : (
-                            <Sparkles className="size-4" strokeWidth={1.75} />
-                        )}
-                        Ask
-                    </Button>
-                </form>
-
+                            Generating…
+                        </>
+                    ) : summary ? (
+                        'Refresh'
+                    ) : (
+                        'Generate'
+                    )}
+                </Button>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
                 {error.length > 0 && (
                     <Alert variant="destructive" onDismiss={() => setError([])}>
                         <AlertDescription>
@@ -211,23 +129,31 @@ function WorkspaceInquireCard({ workspaceId }: { workspaceId: number }) {
                     </Alert>
                 )}
 
-                {loadingHistory && (
+                {!summary && !generating && (
+                    <p className="text-sm text-muted-foreground-1">
+                        Generate an AI narrative summary of this workspace's analyzed videos.
+                    </p>
+                )}
+
+                {generating && !summary && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground-1">
                         <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
-                        Loading history…
+                        Summarizing this workspace's videos…
                     </div>
                 )}
 
-                {!loadingHistory && history.length > 0 && (
-                    <div className="flex flex-col gap-3">
-                        {history.map((item) => (
-                            <WorkspaceInquiryAnswerCard
-                                key={item.id}
-                                inquiry={item}
-                                onNavigateToVideo={(videoId) => navigate(`/videos/${videoId}/results`)}
-                            />
-                        ))}
-                    </div>
+                {summary && (
+                    <>
+                        <p className="text-sm text-foreground">{summary.summary}</p>
+                        {summary.highlights.length > 0 && (
+                            <ul className="list-disc space-y-1 pl-4 text-sm text-muted-foreground-1">
+                                {summary.highlights.map((highlight) => (
+                                    <li key={highlight}>{highlight}</li>
+                                ))}
+                            </ul>
+                        )}
+                        <p className="text-xs text-muted-foreground-2">Generated {new Date(summary.generated_at).toLocaleString()}</p>
+                    </>
                 )}
             </CardContent>
         </Card>
@@ -280,7 +206,7 @@ export default function WorkspaceDashboard() {
         plotOptions: { bar: { borderRadius: 6, columnWidth: '55%' } },
         dataLabels: { enabled: false },
         grid: { borderColor: gridLine, strokeDashArray: 4 },
-        xaxis: { categories: ['Object detection', 'Threat detection', 'Content moderation'] },
+        xaxis: { categories: ['Object detection', 'Threat detection', 'Content moderation', 'Text detection'] },
         tooltip: { theme: 'dark' },
     };
 
@@ -343,6 +269,10 @@ export default function WorkspaceDashboard() {
                     <h1 className="mt-4 font-heading text-2xl font-medium">{dashboard.workspace.name}</h1>
                     <p className="mt-1 text-sm text-muted-foreground-1">Dashboard</p>
 
+                    <div className="mt-6">
+                        <WorkspaceSummaryCard workspaceId={dashboard.workspace.id} initialSummary={dashboard.insight_summary} />
+                    </div>
+
                     <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         <StatCard icon={<Video className="size-5" strokeWidth={1.75} />} label="Total videos" value={dashboard.stats.total_videos} />
                         <StatCard
@@ -377,21 +307,6 @@ export default function WorkspaceDashboard() {
                             value={dashboard.insight_flags.flagged_moderation}
                             caption="from generated AI insights"
                             tone={dashboard.insight_flags.flagged_moderation > 0 ? 'warning' : 'default'}
-                        />
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                        <StatCard
-                            icon={<Sparkles className="size-5" strokeWidth={1.75} />}
-                            label="Inquiries asked"
-                            value={dashboard.stats.total_inquiries}
-                        />
-                        <StatCard
-                            icon={<HelpCircle className="size-5" strokeWidth={1.75} />}
-                            label="Unanswerable inquiries"
-                            value={dashboard.stats.unanswerable_inquiries}
-                            caption="not covered by available analysis"
-                            tone={dashboard.stats.unanswerable_inquiries > 0 ? 'warning' : 'default'}
                         />
                     </div>
 
@@ -465,6 +380,7 @@ export default function WorkspaceDashboard() {
                                                 dashboard.jobs_by_type.object_detection,
                                                 dashboard.jobs_by_type.threat_detection,
                                                 dashboard.jobs_by_type.content_moderation,
+                                                dashboard.jobs_by_type.text_detection,
                                             ],
                                         },
                                     ]}
@@ -548,10 +464,6 @@ export default function WorkspaceDashboard() {
                                 )}
                             </CardContent>
                         </Card>
-                    </div>
-
-                    <div className="mt-4">
-                        <WorkspaceInquireCard workspaceId={dashboard.workspace.id} />
                     </div>
                 </>
             )}

@@ -36,9 +36,8 @@ what each analysis type produces.
 
 The analysis engine is built behind a provider interface on purpose — Amazon
 Rekognition is the first implementation, not the only one intended.
-`Object Detection` and `Content Moderation` are live today; `AI Generated`
-(deepfake/synthetic video detection) already exists as a selectable analysis
-type in the UI, deliberately disabled until that capability is actually built.
+`Object Detection`, `Content Moderation`, `Threat Detection`, and
+`Text/OCR Detection` are all live today.
 
 On top of the raw detections, an AI insights layer turns structured Rekognition
 output into analyst-style summaries — with a distinct prompt and output schema
@@ -47,8 +46,7 @@ generated insight is persisted, and real, data-backed dashboards exist at both
 the workspace and account level. A free-text Inquire agent lets a user ask a
 specific question about a single video, grounded in that video's own detection
 data rather than a fixed set of prompts. The near-term direction: more
-analysis providers behind the same interface, and the `AI Generated` detection
-type actually implemented.
+analysis providers behind the same interface.
 
 ## Features
 
@@ -65,7 +63,8 @@ type actually implemented.
      catalog of ~94 objects across 9 categories (people, vehicles, animals,
      household items, electronics, personal items, food, tools,
      security-relevant items).
-   - **AI Generated** — visible, currently disabled (not yet implemented).
+   - **Threat Detection** — correlates weapon/hazard objects with content-moderation violence labels.
+   - **Text/OCR Detection** — reads on-screen text (signage, captions, labels) via Rekognition's text-detection API.
    - Optional auto-start: begin analysis immediately after upload finishes.
 
 **Video management** — sortable/paginated list with live status
@@ -98,7 +97,7 @@ concurrency (`WORKER_CONCURRENCY`, default 3) multiplies effective throughput
 further.
 
 **AI-powered insights** — once a video has completed analysis, generate an
-analyst-style summary from the raw detections. Three purpose-built prompts,
+analyst-style summary from the raw detections. Four purpose-built prompts,
 not one generic one, matched to what each analysis type actually produces:
 - **Object detection** — what's in the video, grouped and time-stamped, with
   notable combinations or changes over time called out.
@@ -107,10 +106,14 @@ not one generic one, matched to what each analysis type actually produces:
   (e.g. a person + a weapon), the way a human analyst would.
 - **Content moderation** — a SAFE / REVIEW / UNSAFE verdict with severity,
   scoped to Rekognition's own moderation labels.
+- **Text detection** — the on-screen text found, grouped and time-stamped,
+  with anything notable (warnings, names, addresses) called out.
 
 Insights can be generated for a single analysis type or all of them at once,
 and every generated insight is persisted (`video_insights`) for later
-reference.
+reference. If generation fails after exhausting retries, the results page
+shows the failure plainly with a one-click retry, rather than leaving the
+page stuck on "not ready yet" indefinitely.
 
 **Report export** — download a PDF summary of a video's analysis results and
 AI insights (overview, per-label bar charts, threat/moderation assessments,
@@ -126,17 +129,23 @@ in that video's own data.
 **Inquire** — ask a specific free-text question about a single video (e.g.
 "was a weapon visible near the entrance?") and get a direct, evidence-cited
 answer grounded in that video's detection data and generated insights, rather
-than a fixed prompt. The agent is built to say so plainly when the available
-analysis doesn't actually support an answer, instead of guessing. Every
-question and answer is saved to that video's history.
+than a fixed prompt. Suggested starter questions are tailored to whichever
+analysis types actually ran on the video. Every answer includes an evidence
+table, a chronological investigation timeline reconstructed from the cited
+detections, and a "Why?" section explaining the reasoning behind it. The
+agent is built to say so plainly when the available analysis doesn't
+actually support an answer, instead of guessing. Every question and answer
+is saved to that video's history (paginated for long histories) and included
+in the video's exported PDF report.
 
 **Workspace dashboard** — real, per-workspace analytics linked directly from
-the workspace table: video/storage/analysis stat cards, a 14-day upload
-activity chart, a videos-by-status breakdown, analysis jobs by type, the top
-detected labels across the workspace, threat/moderation flag counts sourced
-from generated AI insights, and Inquire activity (questions asked, and how
-many the agent couldn't answer from available data — a signal that more
-analysis types may be needed).
+the workspace table: an AI-generated narrative summary of the workspace's
+analyzed videos with notable highlights (manually triggered via a
+Generate/Refresh button rather than regenerated on every page load, so
+viewing the dashboard never costs an AI call), video/storage/analysis stat
+cards, a 14-day upload activity chart, a videos-by-status breakdown,
+analysis jobs by type, the top detected labels across the workspace, and
+threat/moderation flag counts sourced from generated AI insights.
 
 **Account dashboard** — a cross-workspace overview: account-wide totals
 (including total Inquire questions asked), a safety spotlight surfacing the
@@ -144,10 +153,17 @@ videos most worth a human's attention (ranked by risk/severity across every
 workspace), a per-workspace leaderboard, and a recent cross-workspace activity
 feed.
 
-**Observability** — Sentry on both the PHP app and the Python worker;
-structured job lifecycle logging (queued, attempt N/3, succeeded, failed) from
-the worker; a durable audit trail in `analysis_jobs`/`analysis_results`
-(status, attempts, error messages) queryable without a separate dashboard.
+**Observability** — Sentry error tracking and performance tracing on both the
+PHP app and the Python worker, including Sentry's Queues dashboard for both
+job queues in the system: Laravel's own queue (insight generation) and the
+Redis Stream that hands analysis jobs to the Python worker. A single
+"Analyze" request is traced end to end as one distributed trace across the
+PHP → Redis → Python boundary (`queue.publish` / `queue.process` spans with
+trace-context propagation), so a slow or failed job can be followed straight
+from the request that queued it into the worker's own processing. Structured
+job lifecycle logging (queued, attempt N/3, succeeded, failed) from the
+worker; a durable audit trail in `analysis_jobs`/`analysis_results` (status,
+attempts, error messages) queryable without a separate dashboard.
 
 ## Tech stack
 
@@ -155,12 +171,12 @@ the worker; a durable audit trail in `analysis_jobs`/`analysis_results`
 - [Laravel 13](https://laravel.com) (PHP 8.3+) — Action-per-operation pattern, thin controllers
 - [Laravel Fortify](https://laravel.com/docs/fortify) — authentication (registration, email verification, password reset)
 - [Laravel Sanctum](https://laravel.com/docs/sanctum) — API auth for the SPA
-- [laravel/ai](https://github.com/laravel/ai) + Google Gemini — five structured-output agents: one per analysis type, plus cross-video Search and per-video Inquire
+- [laravel/ai](https://github.com/laravel/ai) + Google Gemini — six structured-output agents: one per analysis type, plus cross-video Search and per-video Inquire
 - MySQL 8.4
 - Redis 7 — two independent uses: the Redis Stream (+ consumer group) that hands analysis jobs to the Python worker, and Laravel's own queue (`queue:work`, run via Supervisor) for insight generation
 - [Spatie Laravel PDF](https://github.com/spatie/laravel-pdf) + Browsershot (headless Chrome) — video report export
 - [getID3](https://github.com/JamesHeinrich/getID3) — video metadata inspection on upload
-- [Sentry](https://sentry.io) — error tracking
+- [Sentry](https://sentry.io) — error tracking + performance tracing (Queues dashboard, distributed traces)
 
 **Frontend**
 - React 19 + TypeScript, React Router 7 (SPA, no Inertia)
@@ -171,9 +187,9 @@ the worker; a durable audit trail in `analysis_jobs`/`analysis_results`
 **Analysis worker** (`analysis-worker/`)
 - Python 3.12, plain functions over a framework — no ORM, no DI container
 - `redis-py` — consumes the job queue; each replica processes several jobs concurrently via a thread pool (`WORKER_CONCURRENCY`, default 3), since a job spends nearly all its time waiting on Rekognition, not on CPU
-- `boto3` — Amazon Rekognition Video (async label detection + content moderation) and S3
+- `boto3` — Amazon Rekognition Video (async label detection, content moderation, and text detection) and S3
 - `PyMySQL` — writes job/result status directly to the same MySQL database
-- `sentry-sdk` — error tracking, mirroring the PHP side
+- `sentry-sdk` — error tracking + performance tracing, mirroring the PHP side; continues the distributed trace the PHP app started, across the Redis Stream queue boundary
 
 **Infrastructure**
 - Docker Compose: `app`, `mysql`, `redis`, `analysis-worker` (horizontally scaled), `vite` (dev only)
@@ -191,7 +207,9 @@ Copy `.env.example` to `.env` and fill in:
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_DEFAULT_REGION` / `AWS_BUCKET` | Rekognition Video + S3 scratch space, used by the analysis worker |
 | `GEMINI_API_KEY` | Google Gemini — powers the AI insights layer (`app/Ai/Agents/*`) |
 | `ANALYSIS_PROVIDER` | Which provider implements the analysis-worker's provider interface (`rekognition` today) |
-| `SENTRY_LARAVEL_DSN` / `SENTRY_DSN` | Optional error tracking, for the PHP app and Python worker respectively |
+| `SENTRY_DSN` | Optional error tracking + tracing, shared by the PHP app (as a fallback) and the Python worker |
+| `SENTRY_LARAVEL_DSN` | Optional override if the PHP app should report to a different Sentry project than the worker — leave unset (not blank) to fall back to `SENTRY_DSN` |
+| `SENTRY_TRACES_SAMPLE_RATE` | Performance tracing sample rate (0.0–1.0), shared by both. Unset disables tracing entirely |
 
 Everything else (`DB_*`, `REDIS_*`, `MYSQL_*`) has working local defaults for
 Docker Compose out of the box.

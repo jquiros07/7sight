@@ -97,6 +97,7 @@ class VideoController extends Controller
                     AnalysisType::ObjectDetection->value,
                     AnalysisType::ThreatDetection->value,
                     AnalysisType::ContentModeration->value,
+                    AnalysisType::TextDetection->value,
                 ])],
             ]);
 
@@ -163,7 +164,7 @@ class VideoController extends Controller
     public function inquiries(Request $request, Video $video, ListVideoInquiries $listVideoInquiries)
     {
         try {
-            return response()->json($listVideoInquiries($request->user(), $video));
+            return response()->json($listVideoInquiries($request->user(), $video, $request->query()));
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
         } catch (Throwable $e) {

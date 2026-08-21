@@ -11,12 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('workspace_inquiries', function (Blueprint $table) {
+        Schema::create('workspace_insight_summaries', function (Blueprint $table) {
             $table->id();
             $table->foreignId('workspace_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
-            $table->text('question');
-            $table->json('answer');
+            $table->text('summary');
+            $table->json('highlights');
             $table->timestamps();
         });
     }
@@ -26,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('workspace_inquiries');
+        Schema::dropIfExists('workspace_insight_summaries');
     }
 };

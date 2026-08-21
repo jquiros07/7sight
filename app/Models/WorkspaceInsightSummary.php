@@ -9,10 +9,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'workspace_id',
     'user_id',
-    'question',
-    'answer',
+    'summary',
+    'highlights',
 ])]
-class WorkspaceInquiry extends Model
+class WorkspaceInsightSummary extends Model
 {
     /**
      * @return array<string, string>
@@ -20,7 +20,7 @@ class WorkspaceInquiry extends Model
     protected function casts(): array
     {
         return [
-            'answer' => 'array',
+            'highlights' => 'array',
         ];
     }
 

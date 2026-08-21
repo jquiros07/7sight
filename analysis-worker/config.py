@@ -16,6 +16,7 @@ AWS_BUCKET = os.environ.get("AWS_BUCKET")
 
 ANALYSIS_PROVIDER = os.environ.get("ANALYSIS_PROVIDER", "rekognition")
 SENTRY_DSN = os.environ.get("SENTRY_DSN")
+SENTRY_TRACES_SAMPLE_RATE = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0"))
 
 # Rekognition's label detection defaults to returning anything with >= 50%
 # confidence if MinConfidence isn't set, which surfaces a lot of speculative,
