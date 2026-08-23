@@ -20,6 +20,11 @@ services:
     # Only app/analysis-worker need DB access, over the internal docker network.
     ports: !reset []
 
+  mediamtx:
+    # Only HLS needs to be reachable, and only through Caddy. The control API
+    # (9997) has no auth of its own, so it stays internal-only in production.
+    ports: !reset []
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped

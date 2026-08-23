@@ -3,6 +3,7 @@
 namespace App\Actions\Video;
 
 use App\Actions\Video\Concerns\AuthorizesVideoAccess;
+use App\Enums\AnalysisType;
 use App\Enums\VideoStatus;
 use App\Models\AnalysisJob;
 use App\Models\User;
@@ -96,6 +97,7 @@ class AnalyzeVideo
         $completedTypes = AnalysisJob::whereIn('id', $latestJobIds)
             ->where('status', 'completed')
             ->pluck('type')
+            ->map(fn (AnalysisType $type) => $type->value)
             ->all();
 
         return array_values(array_diff($analysisTypes, $completedTypes));

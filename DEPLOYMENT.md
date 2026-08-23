@@ -62,6 +62,7 @@ Edit `.env`:
 - `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_DEFAULT_REGION` / `AWS_BUCKET` from step 1.
 - `SENTRY_LARAVEL_DSN` / `SENTRY_DSN` — optional but recommended (separate Sentry projects for the PHP app and the Python worker).
 - **Remove or comment out `COMPOSE_PROFILES=dev`.** This is what keeps the Vite dev server from starting in production — the `production` Docker build target (below) already ships pre-built assets.
+- `MEDIAMTX_PUBLIC_HLS_URL=https://your-domain.com/hls` — the browser-facing URL for live camera streams, proxied through Caddy (see the Caddyfile step below). `MEDIAMTX_API_URL` can stay at its default (`http://mediamtx:9997`); it's only used container-to-container.
 
 ```bash
 cp Caddyfile.example Caddyfile

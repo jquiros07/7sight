@@ -39,4 +39,9 @@ return [
         'token' => env('INTERNAL_API_TOKEN'),
     ],
 
+    'mediamtx' => [
+        'api_url' => env('MEDIAMTX_API_URL', 'http://mediamtx:9997'),
+        'public_hls_url' => env('MEDIAMTX_PUBLIC_HLS_URL', 'http://localhost:8888'),
+    ],
+
 ];

@@ -1,6 +1,9 @@
 import { useEffect } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import { RequireAuth } from './lib/RequireAuth';
+import CameraCreate from './pages/CameraCreate';
+import CameraEdit from './pages/CameraEdit';
+import Cameras from './pages/Cameras';
 import Dashboard from './pages/Dashboard';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -82,6 +85,30 @@ export default function Router() {
                 element={
                     <RequireAuth>
                         <VideoSearch />
+                    </RequireAuth>
+                }
+            />
+            <Route
+                path="/cameras"
+                element={
+                    <RequireAuth>
+                        <Cameras />
+                    </RequireAuth>
+                }
+            />
+            <Route
+                path="/cameras/create"
+                element={
+                    <RequireAuth>
+                        <CameraCreate />
+                    </RequireAuth>
+                }
+            />
+            <Route
+                path="/cameras/:id/edit"
+                element={
+                    <RequireAuth>
+                        <CameraEdit />
                     </RequireAuth>
                 }
             />

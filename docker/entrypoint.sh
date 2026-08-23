@@ -11,4 +11,11 @@ if [ "$AUTO_MIGRATE" = "true" ]; then
     php artisan migrate --force
 fi
 
+# MediaMTX doesn't persist paths added via its API across restarts, so
+# re-register every camera on every boot of this container too - keeps the
+# two in sync regardless of which one restarts. Best-effort: never block
+# startup over it (handles its own errors internally; `|| true` is just a
+# backstop against an unexpected non-zero exit).
+php artisan cameras:sync || true
+
 exec "$@"
