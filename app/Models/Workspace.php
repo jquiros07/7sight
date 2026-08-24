@@ -28,6 +28,7 @@ class Workspace extends Model
     {
         static::deleting(function (Workspace $workspace) {
             $workspace->videos()->delete();
+            $workspace->cameras()->delete();
         });
     }
 
@@ -47,6 +48,11 @@ class Workspace extends Model
     public function videos(): HasMany
     {
         return $this->hasMany(Video::class);
+    }
+
+    public function cameras(): HasMany
+    {
+        return $this->hasMany(Camera::class);
     }
 
     public function insightSummaries(): HasMany

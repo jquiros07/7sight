@@ -4,7 +4,9 @@ import type { ApexOptions } from 'apexcharts';
 import { AppLayout } from '@/components/AppLayout';
 import {
     AlertTriangle,
+    Camera,
     CheckCircle2,
+    Circle,
     Clock,
     Database,
     Folder,
@@ -44,6 +46,7 @@ type LeaderboardWorkspace = {
     total_videos: number;
     failed_videos: number;
     flagged_count: number;
+    total_cameras: number;
     last_activity_at: string | null;
 };
 
@@ -64,6 +67,8 @@ type DashboardData = {
         processing_videos: number;
         stuck_processing_videos: number;
         total_inquiries: number;
+        total_cameras: number;
+        active_recordings: number;
     };
     uploads_over_time: { date: string; count: number }[];
     safety_spotlight: {
@@ -154,6 +159,15 @@ function computeSuggestions(dashboard: DashboardData): Suggestion[] {
         });
     }
 
+    if (dashboard.stats.active_recordings > 0) {
+        const n = dashboard.stats.active_recordings;
+        suggestions.push({
+            icon: <Circle className="size-4 fill-current" strokeWidth={1.75} />,
+            tone: 'info',
+            text: `${n} camera${n === 1 ? '' : 's'} currently recording.`,
+        });
+    }
+
     const recentUploads = dashboard.uploads_over_time.reduce((sum, day) => sum + day.count, 0);
     if (recentUploads === 0) {
         suggestions.push({
@@ -239,6 +253,7 @@ function LeaderboardRow({ workspace, rank, onClick }: { workspace: LeaderboardWo
                 <p className="truncate text-sm font-medium text-foreground">{workspace.name}</p>
                 <p className="truncate text-xs text-muted-foreground-1">
                     {workspace.total_videos} video{workspace.total_videos === 1 ? '' : 's'}
+                    {workspace.total_cameras > 0 && ` · ${workspace.total_cameras} camera${workspace.total_cameras === 1 ? '' : 's'}`}
                     {workspace.last_activity_at && ` · last activity ${new Date(workspace.last_activity_at).toLocaleDateString()}`}
                 </p>
             </div>
@@ -382,6 +397,12 @@ export default function Dashboard() {
                             icon={<Sparkles className="size-5" strokeWidth={1.75} />}
                             label="Inquiries asked"
                             value={String(dashboard.stats.total_inquiries)}
+                        />
+                        <StatCell icon={<Camera className="size-5" strokeWidth={1.75} />} label="Cameras" value={String(dashboard.stats.total_cameras)} />
+                        <StatCell
+                            icon={<Circle className="size-5 fill-current" strokeWidth={1.75} />}
+                            label="Recording now"
+                            value={String(dashboard.stats.active_recordings)}
                         />
                     </Card>
 

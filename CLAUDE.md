@@ -39,6 +39,12 @@ whether something counts as a modifying action, treat it as one and ask.
 ### Database queries & ORM
 - Optimize every query using Eloquent ORM or the Query Builder. Select only the columns that are required, use eager loading to prevent N+1 queries, avoid unnecessary database calls, and use appropriate filtering, indexing, pagination, and aggregation strategies where applicable.
 
+### Request data handling
+- Never use `request->all()` when retrieving request data. Do not rely on mass
+  assignment. Explicitly access only the fields required by the operation
+  (e.g. `$request->name`, `$request->email`, `$request->password`), and pass only
+  those required values to Actions, models, or other application layers.
+
 ### Error handling
 - Wrap logic that can fail in `try/catch`.
 - In the `catch`, log the exception before handling or rethrowing

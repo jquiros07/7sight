@@ -13,9 +13,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nodejs \
     npm \
     chromium \
-    && docker-php-ext-install pdo_mysql mbstring bcmath gd zip opcache \
+    ffmpeg \
+    && docker-php-ext-install pdo_mysql mbstring bcmath gd zip opcache pcntl \
     && pecl install redis && docker-php-ext-enable redis \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# www-data's own passwd home dir, owned by root by default. Chromium (via
+# Browsershot, run by php-fpm's www-data workers) reads this actual home
+# directory for its crashpad crash-handler database - not the $HOME env var
+# - and fails outright ("chrome_crashpad_handler: --database is required")
+# if it can't write there. Confirmed empirically: no combination of Chromium
+# launch flags or Linux capabilities (SYS_PTRACE, file capabilities) fixes
+# this: it's specifically this directory's ownership.
+RUN chown www-data:www-data /var/www
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 

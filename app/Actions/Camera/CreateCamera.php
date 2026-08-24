@@ -2,18 +2,22 @@
 
 namespace App\Actions\Camera;
 
+use App\Actions\Camera\Concerns\AuthorizesCameraAccess;
 use App\Actions\Camera\Concerns\ResolvesCameraPathName;
 use App\Models\Camera;
 use App\Models\User;
+use App\Models\Workspace;
 use App\Support\MediaMtxClient;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class CreateCamera
 {
+    use AuthorizesCameraAccess;
     use ResolvesCameraPathName;
 
     private const MAX_CAMERAS = 5;
@@ -24,6 +28,7 @@ class CreateCamera
 
     /**
      * Validate and register a new IP camera, then start restreaming it via MediaMTX.
+     * Requires workspace membership.
      *
      * @param  array<string, mixed>  $input
      *
@@ -32,16 +37,21 @@ class CreateCamera
     public function __invoke(User $user, array $input): Camera
     {
         $validated = Validator::make($input, [
+            'workspace_id' => ['required', 'integer', Rule::exists('workspaces', 'id')->whereNull('deleted_at')],
             'name' => ['required', 'string', 'max:255'],
             'location' => ['nullable', 'string', 'max:255'],
             'stream_url' => ['required', 'string', 'regex:/^rtsp:\/\//i'],
         ])->validate();
 
+        $workspace = Workspace::findOrFail($validated['workspace_id']);
+        $this->authorizeMembership($user, $workspace);
+
         abort_if(Camera::count() >= self::MAX_CAMERAS, 422, 'You can register at most '.self::MAX_CAMERAS.' cameras.');
 
         try {
-            return DB::transaction(function () use ($user, $validated) {
+            return DB::transaction(function () use ($user, $workspace, $validated) {
                 $camera = Camera::create([
+                    'workspace_id' => $workspace->id,
                     'name' => $validated['name'],
                     'location' => $validated['location'] ?? null,
                     'stream_url' => $validated['stream_url'],

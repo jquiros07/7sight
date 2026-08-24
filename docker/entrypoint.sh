@@ -18,4 +18,10 @@ fi
 # backstop against an unexpected non-zero exit).
 php artisan cameras:sync || true
 
+# A recorder restart kills any in-flight ffmpeg recording with it - clean up
+# anything orphaned by that restart immediately rather than waiting up to 10
+# minutes for the next scheduled recordings:reconcile run. Best-effort, same
+# reasoning as cameras:sync above. Harmless (a no-op) on the `app` container.
+php artisan recordings:reconcile || true
+
 exec "$@"

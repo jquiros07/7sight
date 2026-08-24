@@ -1,0 +1,60 @@
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  # Restreams each registered IP camera's RTSP feed as HLS for the live
+  # dashboard. Paths are added/removed dynamically via its control API
+  # (app/Support/MediaMtxClient.php) rather than static config - there's
+  # nothing to list in docker/mediamtx.yml.
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    volumes:
+      - ./docker/mediamtx.yml:/mediamtx.yml
+    ports:
+      - "8888:8888"
+      - "9997:9997"
+      # RTSP - published here only so a local source (e.g. a webcam via
+      # ffmpeg) can publish directly to MediaMTX from the host for testing.
+      # Real IP cameras don't need this: MediaMTX pulls from them instead,
+      # over the internal docker network, without any host port involved.
+      - "8554:8554"
+    restart: unless-stopped
+    <<: *logging
+
+  # Records a camera's RTSP feed to disk via ffmpeg (app/Jobs/RecordCameraFeedJob.php),
+  # started/cancelled through the `recordings` Redis queue. Isolated from the
+  # `app` service so a multi-hour recording never blocks its queue worker or
+  # dies with an app redeploy. Reuses the same PHP/Laravel image as `app`,
+  # but can't reuse docker-compose.yml's `x-app` anchor - YAML anchors don't
+  # carry across separate compose files - so its build/volumes/env are
+  # written out directly instead. The `vendor` named volume it mounts is
+  # declared in docker-compose.yml's top-level `volumes:`; that reference
+  # resolves fine across files since (unlike anchors) top-level `volumes:`/
+  # `services:` maps merge across `include:`d files.
+  recorder:
+    build:
+      context: .
+      target: dev
+    volumes:
+      - .:/var/www/html
+      - vendor:/var/www/html/vendor
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: video_intelligence_platform
+      DB_USERNAME: laravel
+      DB_PASSWORD: ${MYSQL_PASSWORD:-secret}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    command: ["supervisord", "-n", "-c", "/var/www/html/docker/supervisord.recorder.conf"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    <<: *logging

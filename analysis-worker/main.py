@@ -6,6 +6,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 import sentry_sdk
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 import config
 import db
@@ -17,7 +18,21 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger("analysis-worker")
 
 if config.SENTRY_DSN:
-    sentry_sdk.init(dsn=config.SENTRY_DSN, traces_sample_rate=config.SENTRY_TRACES_SAMPLE_RATE)
+    sentry_sdk.init(
+        dsn=config.SENTRY_DSN,
+        traces_sample_rate=config.SENTRY_TRACES_SAMPLE_RATE,
+        # Without enable_logs, the stdlib logger.info() calls throughout this
+        # file only ever became breadcrumbs (attached to a future error event)
+        # - never their own searchable entries in Sentry's Logs product.
+        enable_logs=True,
+        integrations=[
+            LoggingIntegration(
+                sentry_logs_level=logging.INFO,  # stdlib records -> Sentry Logs
+                level=logging.INFO,  # stdlib records -> breadcrumbs (unchanged default)
+                event_level=logging.ERROR,  # stdlib records -> Sentry error events (unchanged default)
+            ),
+        ],
+    )
 
 
 def normalize_label(name: str) -> str:
@@ -63,11 +78,18 @@ def run_analysis(provider, job):
         # The two Rekognition calls are independent async jobs - run them
         # concurrently instead of waiting for one to finish before starting
         # the other, since each one's own poll loop is mostly idle waiting.
+        logger.info("threat_detection: submitting detect_objects + moderate_content")
         with ThreadPoolExecutor(max_workers=2) as executor:
             labels_future = executor.submit(provider.detect_objects, video_path)
             moderation_future = executor.submit(provider.moderate_content, video_path)
-            weapon_detections = filter_to_threat_labels(labels_future.result())
-            violence_detections = filter_to_threat_moderation_labels(moderation_future.result())
+            logger.info("threat_detection: waiting on detect_objects")
+            labels = labels_future.result()
+            logger.info("threat_detection: detect_objects returned %s raw detections", len(labels))
+            weapon_detections = filter_to_threat_labels(labels)
+            logger.info("threat_detection: waiting on moderate_content")
+            moderation = moderation_future.result()
+            logger.info("threat_detection: moderate_content returned %s raw detections", len(moderation))
+            violence_detections = filter_to_threat_moderation_labels(moderation)
         return weapon_detections + violence_detections
 
     if job["type"] == "content_moderation":
@@ -145,8 +167,11 @@ def process(conn, provider, job_id, message_id, fields):
                         span.set_data("messaging.message.receive.latency", latency)
 
                     detections = run_analysis(provider, job)
+                    logger.info("job %s: run_analysis returned %s detections, aggregating", job_id, len(detections))
                     rows = aggregate_detections(detections)
+                    logger.info("job %s: aggregated to %s rows, saving", job_id, len(rows))
                     db.save_results(conn, job_id, rows)
+                    logger.info("job %s: results saved, marking completed", job_id)
 
                 db.mark_completed(conn, job_id)
                 if db.recompute_video_status(conn, job["video_id"]):

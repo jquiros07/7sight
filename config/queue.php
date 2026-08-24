@@ -73,6 +73,20 @@ return [
             'after_commit' => false,
         ],
 
+        // Camera recordings run for up to 24h. The default `retry_after`
+        // above (90s) would make Redis consider a still-running recording
+        // job "lost" and hand it to another worker while the first one is
+        // still legitimately running it - this connection is identical
+        // except for a retry_after well past the longest possible recording.
+        'recordings' => [
+            'driver' => 'redis',
+            'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
+            'queue' => 'recordings',
+            'retry_after' => 90000,
+            'block_for' => null,
+            'after_commit' => false,
+        ],
+
         'deferred' => [
             'driver' => 'deferred',
         ],

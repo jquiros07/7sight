@@ -44,10 +44,18 @@ class AppServiceProvider extends ServiceProvider
         // first - $HOME=/tmp above is shared by every user in the
         // container, so this collision isn't hypothetical. Not needed for a
         // one-shot headless render anyway.
+        //
+        // --no-sandbox: Chrome's sandbox needs unprivileged user namespaces,
+        // which this image's AppArmor policy restricts ("No usable sandbox!
+        // ... unprivileged user namespaces"), failing outright regardless of
+        // the other flags above. Acceptable here because Browsershot only
+        // ever renders our own server-generated report template, never
+        // arbitrary/user-supplied HTML or URLs.
         $this->app->bind(PdfFactory::class, fn () => (new PdfFactory)->withBrowsershot(
             fn (Browsershot $browsershot) => $browsershot->setOption('args', [
                 '--disable-dev-shm-usage',
                 '--disable-crash-reporter',
+                '--no-sandbox',
             ])
         ));
     }

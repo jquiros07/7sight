@@ -19,8 +19,11 @@ class GenerateVideoInsightsJob implements ShouldQueue
 
     public function handle(GenerateVideoInsights $generateVideoInsights): void
     {
+        Log::info('GenerateVideoInsightsJob started', ['video_id' => $this->video->id]);
+
         try {
             $generateVideoInsights($this->video->uploader, $this->video);
+            Log::info('GenerateVideoInsightsJob finished', ['video_id' => $this->video->id]);
         } catch (Throwable $e) {
             Log::error($e->getMessage(), ['exception' => $e, 'video_id' => $this->video->id]);
 

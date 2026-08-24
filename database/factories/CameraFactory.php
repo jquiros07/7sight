@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Camera;
 use App\Models\User;
+use App\Models\Workspace;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -19,6 +20,7 @@ class CameraFactory extends Factory
     public function definition(): array
     {
         return [
+            'workspace_id' => Workspace::factory(),
             'name' => fake()->words(2, true).' Camera',
             'location' => fake()->optional()->streetAddress(),
             'stream_url' => 'rtsp://'.fake()->userName().':'.fake()->password().'@'.fake()->ipv4().':554/stream1',

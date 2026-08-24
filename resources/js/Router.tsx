@@ -3,6 +3,7 @@ import { Route, Routes, useLocation } from 'react-router-dom';
 import { RequireAuth } from './lib/RequireAuth';
 import CameraCreate from './pages/CameraCreate';
 import CameraEdit from './pages/CameraEdit';
+import CameraRecordings from './pages/CameraRecordings';
 import Cameras from './pages/Cameras';
 import Dashboard from './pages/Dashboard';
 import Home from './pages/Home';
@@ -109,6 +110,14 @@ export default function Router() {
                 element={
                     <RequireAuth>
                         <CameraEdit />
+                    </RequireAuth>
+                }
+            />
+            <Route
+                path="/cameras/:id/recordings"
+                element={
+                    <RequireAuth>
+                        <CameraRecordings />
                     </RequireAuth>
                 }
             />

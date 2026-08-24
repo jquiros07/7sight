@@ -37,10 +37,12 @@ trait PresentsCameraStatus
             'name' => $camera->name,
             'location' => $camera->location,
             'stream_url' => $camera->stream_url,
+            'workspace' => $camera->workspace?->name,
             'created_by' => $camera->creator?->name,
             'created_at' => $camera->created_at,
             'is_live' => $activePaths[$this->pathName($camera)] ?? false,
             'hls_url' => rtrim(config('services.mediamtx.public_hls_url'), '/')."/{$this->pathName($camera)}/index.m3u8",
+            'active_recording_ends_at' => $camera->activeRecording?->ends_at,
         ];
     }
 }

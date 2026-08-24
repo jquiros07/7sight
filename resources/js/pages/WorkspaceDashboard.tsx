@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { ApexOptions } from 'apexcharts';
 import { AppLayout } from '@/components/AppLayout';
-import { CheckCircle2, ChevronLeft, Clock, Database, Loader2, ShieldAlert, ShieldQuestion, Sparkles, Video, XCircle } from 'lucide-react';
+import { Camera, CheckCircle2, ChevronLeft, Circle, Clock, Database, Loader2, ShieldAlert, ShieldQuestion, Sparkles, Video, XCircle } from 'lucide-react';
 import { cssVarToValue } from 'preline/helpers/apexcharts';
 import { api } from '../lib/api';
 import { getErrorMessages } from '../lib/errors';
@@ -27,6 +27,10 @@ type WorkspaceDashboardData = {
         processing_now: number;
         failed_jobs: number;
         avg_processing_seconds: number | null;
+        total_cameras: number;
+        total_recordings: number;
+        active_recordings: number;
+        total_recording_storage_bytes: number;
     };
     uploads_over_time: { date: string; count: number }[];
     videos_by_status: { uploaded: number; processing: number; ready: number; failed: number };
@@ -35,6 +39,7 @@ type WorkspaceDashboardData = {
     insight_flags: { threats_detected: number; flagged_moderation: number };
     risk_level_breakdown: { LOW: number; MEDIUM: number; HIGH: number; CRITICAL: number };
     moderation_severity_breakdown: { NONE: number; LOW: number; MEDIUM: number; HIGH: number };
+    recordings_by_status: { recording: number; completed: number; failed: number; cancelled: number };
 };
 
 function formatFileSize(bytes: number): string {
@@ -200,6 +205,15 @@ export default function WorkspaceDashboard() {
         plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Videos' } } } } },
     };
 
+    const recordingStatusOptions: ApexOptions = {
+        chart: { fontFamily: 'inherit', foreColor: foregroundMuted },
+        labels: ['Recording', 'Completed', 'Failed', 'Cancelled'],
+        colors: ['#ef4444', '#22c55e', '#f59e0b', primary],
+        legend: { position: 'bottom' },
+        dataLabels: { enabled: true, formatter: (v: number) => `${Math.round(v)}%` },
+        plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Recordings' } } } } },
+    };
+
     const jobsByTypeOptions: ApexOptions = {
         chart: { fontFamily: 'inherit', foreColor: foregroundMuted },
         colors: [primary],
@@ -322,6 +336,25 @@ export default function WorkspaceDashboard() {
                             label="Avg. processing time"
                             value={formatDurationShort(dashboard.stats.avg_processing_seconds)}
                             caption="per completed job"
+                        />
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <StatCard icon={<Camera className="size-5" strokeWidth={1.75} />} label="Cameras" value={dashboard.stats.total_cameras} />
+                        <StatCard
+                            icon={<Circle className="size-5 fill-current" strokeWidth={1.75} />}
+                            label="Recording now"
+                            value={dashboard.stats.active_recordings}
+                        />
+                        <StatCard
+                            icon={<Video className="size-5" strokeWidth={1.75} />}
+                            label="Total recordings"
+                            value={dashboard.stats.total_recordings}
+                        />
+                        <StatCard
+                            icon={<Database className="size-5" strokeWidth={1.75} />}
+                            label="Recording storage"
+                            value={formatFileSize(dashboard.stats.total_recording_storage_bytes)}
                         />
                     </div>
 
@@ -465,6 +498,32 @@ export default function WorkspaceDashboard() {
                             </CardContent>
                         </Card>
                     </div>
+
+                    {dashboard.stats.total_cameras > 0 && (
+                        <Card className="mt-4">
+                            <CardHeader>
+                                <CardTitle>Recordings by status</CardTitle>
+                                <CardDescription>This workspace's cameras</CardDescription>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                                {dashboard.stats.total_recordings > 0 ? (
+                                    <ApexChart
+                                        type="donut"
+                                        height={300}
+                                        options={recordingStatusOptions}
+                                        series={[
+                                            dashboard.recordings_by_status.recording,
+                                            dashboard.recordings_by_status.completed,
+                                            dashboard.recordings_by_status.failed,
+                                            dashboard.recordings_by_status.cancelled,
+                                        ]}
+                                    />
+                                ) : (
+                                    <p className="py-10 text-center text-sm text-muted-foreground-1">No recordings yet.</p>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
                 </>
             )}
         </AppLayout>

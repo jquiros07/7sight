@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 import uuid
@@ -6,6 +7,8 @@ import boto3
 
 import config
 from providers.base import AnalysisProvider, Detection
+
+logger = logging.getLogger("analysis-worker")
 
 POLL_INTERVAL_SECONDS = 5
 
@@ -42,16 +45,21 @@ class RekognitionProvider(AnalysisProvider):
     def _run(self, video_path, start_fn, collect_fn, **start_kwargs) -> list[Detection]:
         s3_key = self._upload_scratch_copy(video_path)
         try:
+            logger.info("rekognition: starting %s (s3_key=%s)", start_fn.__name__, s3_key)
             job_id = start_fn(
                 Video={"S3Object": {"Bucket": config.AWS_BUCKET, "Name": s3_key}}, **start_kwargs
             )["JobId"]
+            logger.info("rekognition: %s job started (job_id=%s)", start_fn.__name__, job_id)
             return collect_fn(job_id)
         finally:
+            logger.info("rekognition: deleting scratch copy (s3_key=%s)", s3_key)
             self._s3.delete_object(Bucket=config.AWS_BUCKET, Key=s3_key)
 
     def _upload_scratch_copy(self, video_path: str) -> str:
         key = f"analysis-tmp/{uuid.uuid4()}/{os.path.basename(video_path)}"
+        logger.info("rekognition: uploading scratch copy to s3 (video_path=%s, key=%s)", video_path, key)
         self._s3.upload_file(video_path, config.AWS_BUCKET, key)
+        logger.info("rekognition: scratch copy uploaded (key=%s)", key)
         return key
 
     def _collect_labels(self, job_id: str) -> list[Detection]:
@@ -95,8 +103,14 @@ class RekognitionProvider(AnalysisProvider):
     def _poll(self, get_fn, job_id: str, result_key: str) -> list[dict]:
         """Poll a Rekognition Video Get* endpoint until it finishes, then walk
         every page of results."""
+        last_status = None
+        polls = 0
         while True:
             response = get_fn(JobId=job_id)
+            polls += 1
+            if response["JobStatus"] != last_status:
+                logger.info("rekognition: job %s status=%s (poll #%s)", job_id, response["JobStatus"], polls)
+                last_status = response["JobStatus"]
             if response["JobStatus"] == "SUCCEEDED":
                 break
             if response["JobStatus"] == "FAILED":
@@ -105,9 +119,13 @@ class RekognitionProvider(AnalysisProvider):
 
         items = list(response[result_key])
         next_token = response.get("NextToken")
+        pages = 1
         while next_token:
             response = get_fn(JobId=job_id, NextToken=next_token)
             items.extend(response[result_key])
             next_token = response.get("NextToken")
+            pages += 1
+
+        logger.info("rekognition: job %s collected %s items across %s page(s)", job_id, len(items), pages)
 
         return items

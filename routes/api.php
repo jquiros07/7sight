@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CameraController;
+use App\Http\Controllers\CameraRecordingController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ObjectDetectionCategoryController;
 use App\Http\Controllers\SearchController;
@@ -29,6 +30,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/videos/{video}/inquiries', [VideoController::class, 'inquire'])->middleware('throttle:10,1');
     Route::get('/object-detection-categories', [ObjectDetectionCategoryController::class, 'index']);
     Route::apiResource('cameras', CameraController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
+    Route::prefix('cameras/{camera}')->group(function () {
+        Route::get('/recordings', [CameraRecordingController::class, 'index']);
+        Route::post('/recordings', [CameraRecordingController::class, 'store']);
+        Route::post('/recordings/{recording}/cancel', [CameraRecordingController::class, 'cancel']);
+        Route::post('/recordings/{recording}/clip', [CameraRecordingController::class, 'clip']);
+        Route::get('/recordings/{recording}/download', [CameraRecordingController::class, 'download']);
+    });
 });
 
 // Called by the analysis-worker (not a browser client) once a video's

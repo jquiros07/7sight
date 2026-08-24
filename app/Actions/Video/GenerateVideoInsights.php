@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Models\Video;
 use App\Models\VideoInsight;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
@@ -35,6 +36,8 @@ class GenerateVideoInsights
     public function __invoke(User $user, Video $video, ?AnalysisType $type = null): array
     {
         $this->authorizeMembership($user, $video->workspace);
+
+        Log::info('Generating video insights', ['video_id' => $video->id, 'type' => $type?->value ?? 'all']);
 
         $video->loadMissing('analysisJobs.results', 'latestInsight');
 
@@ -100,6 +103,11 @@ class GenerateVideoInsights
             $video->forceFill(['insights_failed_at' => null])->save();
         }
 
+        Log::info('Video insights generated', [
+            'video_id' => $video->id,
+            'fields_generated' => array_keys(array_filter($result, fn ($value) => $value !== null)),
+        ]);
+
         return $result;
     }
 
@@ -112,12 +120,25 @@ class GenerateVideoInsights
      */
     private function promptForInsights(Agent $agent, array $data): array
     {
-        return retry(
+        $agentName = $agent::class;
+
+        Log::info('Prompting insights agent', ['agent' => $agentName]);
+
+        $result = retry(
             times: 3,
             callback: fn () => $agent->prompt(json_encode($data, JSON_PRETTY_PRINT))->toArray(),
             sleepMilliseconds: fn (int $attempt) => $attempt * 500,
-            when: fn (Throwable $e) => $e instanceof RateLimitedException || $e instanceof ProviderOverloadedException,
+            when: function (Throwable $e) use ($agentName) {
+                $retryable = $e instanceof RateLimitedException || $e instanceof ProviderOverloadedException;
+                Log::info('Insights agent call failed', ['agent' => $agentName, 'retrying' => $retryable, 'error' => $e->getMessage()]);
+
+                return $retryable;
+            },
         );
+
+        Log::info('Insights agent responded', ['agent' => $agentName]);
+
+        return $result;
     }
 
     /**

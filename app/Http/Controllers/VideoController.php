@@ -38,7 +38,15 @@ class VideoController extends Controller
     public function store(Request $request, UploadVideo $uploadVideo)
     {
         try {
-            return response()->json($uploadVideo($request->user(), $request->all()), 201);
+            return response()->json($uploadVideo($request->user(), [
+                'workspace_id' => $request->workspace_id,
+                'title' => $request->title,
+                'description' => $request->description,
+                'file' => $request->file('file'),
+                'analysis_types' => $request->analysis_types,
+                'auto_start_analysis' => $request->auto_start_analysis,
+                'analysis_config' => $request->analysis_config,
+            ]), 201);
         } catch (ValidationException $e) {
             return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], $e->status);
         } catch (HttpException $e) {
@@ -136,7 +144,9 @@ class VideoController extends Controller
     public function update(Request $request, Video $video, UpdateVideo $updateVideo)
     {
         try {
-            return $updateVideo($request->user(), $video, $request->all());
+            return $updateVideo($request->user(), $video, $request->only([
+                'title', 'description', 'analysis_types', 'auto_start_analysis', 'analysis_config',
+            ]));
         } catch (ValidationException $e) {
             return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], $e->status);
         } catch (HttpException $e) {
@@ -177,7 +187,9 @@ class VideoController extends Controller
     public function inquire(Request $request, Video $video, InquireAboutVideo $inquireAboutVideo)
     {
         try {
-            return response()->json($inquireAboutVideo($request->user(), $video, $request->all()), 201);
+            return response()->json($inquireAboutVideo($request->user(), $video, [
+                'question' => $request->question,
+            ]), 201);
         } catch (ValidationException $e) {
             return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], $e->status);
         } catch (HttpException $e) {

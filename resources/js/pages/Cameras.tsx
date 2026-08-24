@@ -1,4 +1,4 @@
-import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Circle, Loader2, Pencil, Plus, Trash2, Video } from 'lucide-react';
 import { HSOverlay } from 'preline';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -13,15 +13,22 @@ import { api } from '../lib/api';
 import { getErrorMessages } from '../lib/errors';
 
 const MAX_CAMERAS = 5;
+const RECORDING_DURATION_OPTIONS = [3, 5, 15, 30, 60, 180, 300, 480];
+
+function formatDurationMinutes(minutes: number): string {
+    return minutes % 60 === 0 ? `${minutes / 60}h` : `${minutes}min`;
+}
 
 type Camera = {
     id: number;
     name: string;
     location: string | null;
+    workspace: string | null;
     created_by: string | null;
     created_at: string;
     is_live: boolean;
     hls_url: string;
+    active_recording_ends_at: string | null;
 };
 
 export default function Cameras() {
@@ -36,6 +43,9 @@ export default function Cameras() {
 
     const [deleteTarget, setDeleteTarget] = useState<Camera | null>(null);
     const [deleting, setDeleting] = useState(false);
+
+    const [recordingDurations, setRecordingDurations] = useState<Record<number, number>>({});
+    const [startingRecordingId, setStartingRecordingId] = useState<number | null>(null);
 
     useEffect(() => {
         if (location.state) {
@@ -78,6 +88,23 @@ export default function Cameras() {
     function openDeleteDialog(camera: Camera) {
         setDeleteTarget(camera);
         HSOverlay.open('#confirm-delete-camera');
+    }
+
+    async function startRecording(camera: Camera) {
+        setStartingRecordingId(camera.id);
+        try {
+            await api.post(`/api/cameras/${camera.id}/recordings`, {
+                duration_minutes: recordingDurations[camera.id] ?? RECORDING_DURATION_OPTIONS[0],
+            });
+            setStatusMessage(`Recording started for ${camera.name}.`);
+            setListError([]);
+            load();
+        } catch (err) {
+            setStatusMessage(null);
+            setListError(getErrorMessages(err));
+        } finally {
+            setStartingRecordingId(null);
+        }
     }
 
     async function confirmDelete() {
@@ -149,9 +176,19 @@ export default function Cameras() {
                             <div className="flex items-center justify-between p-3">
                                 <div>
                                     <p className="font-medium text-foreground">{camera.name}</p>
-                                    <p className="text-xs text-muted-foreground-1">{camera.location || '—'}</p>
+                                    <p className="text-xs text-muted-foreground-1">
+                                        {camera.location || '—'}
+                                        {camera.workspace && ` · ${camera.workspace}`}
+                                    </p>
                                 </div>
                                 <div className="flex gap-1">
+                                    <ActionButton
+                                        icon={<Video className="size-4" strokeWidth={1.75} />}
+                                        label="Recordings"
+                                        ariaLabel={`Recordings for ${camera.name}`}
+                                        onClick={() => navigate(`/cameras/${camera.id}/recordings`)}
+                                        hoverClassName="hover:text-primary"
+                                    />
                                     <ActionButton
                                         icon={<Pencil className="size-4" strokeWidth={1.75} />}
                                         label="Edit"
@@ -168,6 +205,38 @@ export default function Cameras() {
                                     />
                                 </div>
                             </div>
+                            <div className="flex items-center gap-2 border-t border-layer-line px-3 py-2">
+                                {camera.active_recording_ends_at ? (
+                                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground-1">
+                                        <Circle className="size-2 fill-destructive text-destructive" />
+                                        Recording — ends {new Date(camera.active_recording_ends_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                ) : (
+                                    <>
+                                        <select
+                                            value={recordingDurations[camera.id] ?? RECORDING_DURATION_OPTIONS[0]}
+                                            onChange={(e) =>
+                                                setRecordingDurations((current) => ({ ...current, [camera.id]: Number(e.target.value) }))
+                                            }
+                                            className="rounded-lg border-layer-line bg-layer py-1 pl-2 pr-8 text-xs text-foreground focus:border-primary-focus focus:ring-primary-focus"
+                                        >
+                                            {RECORDING_DURATION_OPTIONS.map((minutes) => (
+                                                <option key={minutes} value={minutes}>
+                                                    {formatDurationMinutes(minutes)}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <Button
+                                            variant="secondary"
+                                            className="px-2 py-1 text-xs"
+                                            disabled={startingRecordingId === camera.id}
+                                            onClick={() => startRecording(camera)}
+                                        >
+                                            {startingRecordingId === camera.id ? 'Starting…' : 'Record'}
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
                         </Card>
                     ))}
                 </div>
@@ -176,7 +245,7 @@ export default function Cameras() {
             <ConfirmDialog
                 id="confirm-delete-camera"
                 title="Delete camera"
-                description={`Delete "${deleteTarget?.name}"? This stops its live stream. This cannot be undone.`}
+                description={`Delete "${deleteTarget?.name}"? This stops its live stream, and you'll lose access to all of its recordings (clips already created from them are unaffected). This cannot be undone.`}
                 confirmLabel={deleting ? 'Deleting…' : 'Delete'}
                 confirmIcon={<Trash2 className="size-4" strokeWidth={1.75} />}
                 confirmDisabled={deleting}

@@ -31,7 +31,10 @@ class WorkspaceController extends Controller
     public function store(Request $request, CreateWorkspace $createWorkspace)
     {
         try {
-            return response()->json($createWorkspace($request->user(), $request->all()), 201);
+            return response()->json($createWorkspace($request->user(), [
+                'name' => $request->name,
+                'description' => $request->description,
+            ]), 201);
         } catch (ValidationException $e) {
             return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], $e->status);
         } catch (Throwable $e) {
@@ -83,7 +86,7 @@ class WorkspaceController extends Controller
     public function update(Request $request, Workspace $workspace, UpdateWorkspace $updateWorkspace)
     {
         try {
-            return $updateWorkspace($request->user(), $workspace, $request->all());
+            return $updateWorkspace($request->user(), $workspace, $request->only(['name', 'description']));
         } catch (ValidationException $e) {
             return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], $e->status);
         } catch (HttpException $e) {

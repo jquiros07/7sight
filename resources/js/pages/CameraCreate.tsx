@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { api } from '../lib/api';
@@ -10,21 +10,36 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+type WorkspaceOption = { id: number; name: string };
+
 export default function CameraCreate() {
     const navigate = useNavigate();
 
+    const [workspaces, setWorkspaces] = useState<WorkspaceOption[]>([]);
+    const [workspaceId, setWorkspaceId] = useState('');
     const [name, setName] = useState('');
     const [location, setLocation] = useState('');
     const [streamUrl, setStreamUrl] = useState('');
     const [formErrors, setFormErrors] = useState<string[]>([]);
     const [submitting, setSubmitting] = useState(false);
 
+    useEffect(() => {
+        api.get<{ data: WorkspaceOption[] }>('/api/workspaces', { params: { per_page: 100 } })
+            .then((res) => setWorkspaces(res.data.data))
+            .catch(() => setWorkspaces([]));
+    }, []);
+
     async function handleSubmit(e: FormEvent) {
         e.preventDefault();
         setFormErrors([]);
         setSubmitting(true);
         try {
-            await api.post('/api/cameras', { name, location: location || null, stream_url: streamUrl });
+            await api.post('/api/cameras', {
+                workspace_id: workspaceId,
+                name,
+                location: location || null,
+                stream_url: streamUrl,
+            });
             navigate('/cameras', { state: { message: 'Camera added.' } });
         } catch (err) {
             setFormErrors(getErrorMessages(err));
@@ -55,6 +70,24 @@ export default function CameraCreate() {
                                 </AlertDescription>
                             </Alert>
                         )}
+                        <div className="flex flex-col gap-1.5">
+                            <Label htmlFor="camera-workspace">Workspace</Label>
+                            <select
+                                id="camera-workspace"
+                                value={workspaceId}
+                                onChange={(e) => setWorkspaceId(e.target.value)}
+                                className="block w-full rounded-lg border-layer-line bg-layer px-3 py-1.5 text-sm text-foreground focus:border-primary-focus focus:ring-primary-focus"
+                            >
+                                <option value="" disabled>
+                                    Select a workspace
+                                </option>
+                                {workspaces.map((workspace) => (
+                                    <option key={workspace.id} value={workspace.id}>
+                                        {workspace.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                         <div className="flex flex-col gap-1.5">
                             <Label htmlFor="camera-name">Name</Label>
                             <Input id="camera-name" value={name} onChange={(e) => setName(e.target.value)} />

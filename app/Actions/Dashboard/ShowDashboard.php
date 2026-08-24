@@ -2,8 +2,11 @@
 
 namespace App\Actions\Dashboard;
 
+use App\Enums\CameraRecordingStatus;
 use App\Enums\VideoStatus;
 use App\Models\AnalysisResult;
+use App\Models\Camera;
+use App\Models\CameraRecording;
 use App\Models\User;
 use App\Models\Video;
 use App\Models\Workspace;
@@ -56,6 +59,12 @@ class ShowDashboard
 
         $signals = $this->flaggedSignals($videos, $workspaceNames);
 
+        $cameras = Camera::query()->select(['id', 'workspace_id'])->whereIn('workspace_id', $workspaceIds)->get();
+        $activeRecordings = CameraRecording::query()
+            ->whereIn('camera_id', $cameras->pluck('id'))
+            ->where('status', CameraRecordingStatus::Recording)
+            ->count();
+
         return [
             'stats' => [
                 'total_workspaces' => $workspaces->count(),
@@ -65,6 +74,8 @@ class ShowDashboard
                 'processing_videos' => $videos->where('status', VideoStatus::Processing)->count(),
                 'stuck_processing_videos' => $this->stuckProcessingVideos($videos),
                 'total_inquiries' => (int) $videos->sum('inquiries_count'),
+                'total_cameras' => $cameras->count(),
+                'active_recordings' => $activeRecordings,
             ],
             'uploads_over_time' => $this->uploadsOverTime($videos),
             'safety_spotlight' => [
@@ -72,7 +83,7 @@ class ShowDashboard
                 'flagged_moderation' => $signals->where('type', 'moderation')->count(),
                 'items' => $this->topSignals($signals),
             ],
-            'workspace_leaderboard' => $this->workspaceLeaderboard($workspaces, $videos, $signals),
+            'workspace_leaderboard' => $this->workspaceLeaderboard($workspaces, $videos, $signals, $cameras),
             'recent_activity' => $this->recentActivity($videos, $workspaceNames),
             'top_labels' => $this->topLabels($workspaceIds),
         ];
@@ -209,12 +220,13 @@ class ShowDashboard
      * @param  Collection<int, Workspace>  $workspaces
      * @param  Collection<int, Video>  $videos
      * @param  Collection<int, array<string, mixed>>  $signals
+     * @param  Collection<int, Camera>  $cameras
      * @return array<int, array<string, mixed>>
      */
-    private function workspaceLeaderboard(Collection $workspaces, Collection $videos, Collection $signals): array
+    private function workspaceLeaderboard(Collection $workspaces, Collection $videos, Collection $signals, Collection $cameras): array
     {
         return $workspaces
-            ->map(function (Workspace $workspace) use ($videos, $signals) {
+            ->map(function (Workspace $workspace) use ($videos, $signals, $cameras) {
                 $workspaceVideos = $videos->where('workspace_id', $workspace->id);
 
                 return [
@@ -223,6 +235,7 @@ class ShowDashboard
                     'total_videos' => $workspaceVideos->count(),
                     'failed_videos' => $workspaceVideos->where('status', VideoStatus::Failed)->count(),
                     'flagged_count' => $signals->where('workspace_id', $workspace->id)->count(),
+                    'total_cameras' => $cameras->where('workspace_id', $workspace->id)->count(),
                     'last_activity_at' => $workspaceVideos->sortByDesc('created_at')->first()?->created_at,
                 ];
             })

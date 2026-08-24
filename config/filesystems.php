@@ -36,6 +36,17 @@ return [
             'serve' => true,
             'throw' => false,
             'report' => false,
+            // Flysystem's default "private" visibility creates directories at
+            // 0700/files at 0600, owned by whichever process wrote them. That
+            // breaks cross-container reads (e.g. the `recorder` service, running
+            // as root, writes a camera recording that the `app` service's
+            // www-data then can't traverse into to serve a download). Access
+            // control here is handled by the app's own auth layer, not the
+            // filesystem, so both visibility levels use the same permissive mode.
+            'permissions' => [
+                'file' => ['public' => 0644, 'private' => 0644],
+                'dir' => ['public' => 0755, 'private' => 0755],
+            ],
         ],
 
         'public' => [

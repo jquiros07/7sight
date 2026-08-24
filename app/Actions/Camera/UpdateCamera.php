@@ -2,8 +2,10 @@
 
 namespace App\Actions\Camera;
 
+use App\Actions\Camera\Concerns\AuthorizesCameraAccess;
 use App\Actions\Camera\Concerns\ResolvesCameraPathName;
 use App\Models\Camera;
+use App\Models\User;
 use App\Support\MediaMtxClient;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -13,6 +15,7 @@ use Throwable;
 
 class UpdateCamera
 {
+    use AuthorizesCameraAccess;
     use ResolvesCameraPathName;
 
     public function __construct(
@@ -21,13 +24,16 @@ class UpdateCamera
 
     /**
      * Update a camera's details. Re-registers its MediaMTX source if the stream URL changed.
+     * Requires workspace membership. The camera's workspace is immutable after creation.
      *
      * @param  array<string, mixed>  $input
      *
      * @throws ValidationException
      */
-    public function __invoke(Camera $camera, array $input): Camera
+    public function __invoke(User $user, Camera $camera, array $input): Camera
     {
+        $this->authorizeCameraAccess($user, $camera);
+
         $validated = Validator::make($input, [
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'location' => ['nullable', 'string', 'max:255'],
