@@ -35,7 +35,7 @@ class GenerateVideoInsights
      */
     public function __invoke(User $user, Video $video, ?AnalysisType $type = null): array
     {
-        $this->authorizeMembership($user, $video->workspace);
+        $this->authorizePermission($user, $video->workspace, 'videos.generate-insights');
 
         Log::info('Generating video insights', ['video_id' => $video->id, 'type' => $type?->value ?? 'all']);
 

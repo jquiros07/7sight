@@ -21,7 +21,7 @@ class UpdateVideoTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'member');
         $video = Video::factory()->create(['workspace_id' => $workspace->id, 'user_id' => $uploader->id, 'title' => 'Old Title']);
 
         $updated = (new UpdateVideo)($uploader, $video, ['title' => 'New Title']);
@@ -33,9 +33,9 @@ class UpdateVideoTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $admin = User::factory()->create();
-        $workspace->users()->attach($admin->id, ['role' => 'admin']);
+        $this->assignWorkspaceRole($workspace, $admin, 'admin');
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'member');
         $video = Video::factory()->create(['workspace_id' => $workspace->id, 'user_id' => $uploader->id]);
 
         $updated = (new UpdateVideo)($admin, $video, ['description' => 'Updated by admin']);
@@ -47,9 +47,9 @@ class UpdateVideoTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $member = User::factory()->create();
-        $workspace->users()->attach($member->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $member, 'member');
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'member');
         $video = Video::factory()->create(['workspace_id' => $workspace->id, 'user_id' => $uploader->id]);
 
         try {
@@ -64,7 +64,7 @@ class UpdateVideoTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'member');
         $video = Video::factory()->create([
             'workspace_id' => $workspace->id,
             'user_id' => $uploader->id,
@@ -83,7 +83,7 @@ class UpdateVideoTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'member');
         $video = Video::factory()->create([
             'workspace_id' => $workspace->id,
             'user_id' => $uploader->id,
@@ -102,7 +102,7 @@ class UpdateVideoTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'member');
         $video = Video::factory()->create([
             'workspace_id' => $workspace->id,
             'user_id' => $uploader->id,
@@ -121,7 +121,7 @@ class UpdateVideoTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'member');
         $video = Video::factory()->create(['workspace_id' => $workspace->id, 'user_id' => $uploader->id]);
 
         $this->expectException(ValidationException::class);

@@ -19,7 +19,7 @@ class ShowCameraTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $user = User::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $user, 'member');
         $camera = Camera::factory()->create(['workspace_id' => $workspace->id]);
 
         Http::fake(['*/v3/paths/list' => Http::response([

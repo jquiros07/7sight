@@ -30,7 +30,7 @@ class SearchVideosTest extends TestCase
     {
         $user = User::factory()->create();
         $workspace = Workspace::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($workspace, $user, 'owner');
         Video::factory()->create(['workspace_id' => $workspace->id]);
 
         $result = (new SearchVideos)($user, ['query' => 'forklift']);
@@ -45,7 +45,7 @@ class SearchVideosTest extends TestCase
 
         $user = User::factory()->create();
         $workspace = Workspace::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($workspace, $user, 'owner');
         $video = Video::factory()->create(['workspace_id' => $workspace->id]);
         VideoInsight::create(['video_id' => $video->id, 'object_detection' => ['summary' => 'a forklift']]);
 
@@ -62,7 +62,7 @@ class SearchVideosTest extends TestCase
     {
         $user = User::factory()->create();
         $workspace = Workspace::factory()->create(['name' => 'Warehouse']);
-        $workspace->users()->attach($user->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($workspace, $user, 'owner');
         $video = Video::factory()->create([
             'workspace_id' => $workspace->id,
             'title' => 'Loading Dock',
@@ -92,7 +92,7 @@ class SearchVideosTest extends TestCase
     {
         $user = User::factory()->create();
         $workspace = Workspace::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($workspace, $user, 'owner');
         $video = Video::factory()->create(['workspace_id' => $workspace->id]);
         VideoInsight::create(['video_id' => $video->id, 'object_detection' => ['summary' => 'a forklift']]);
 
@@ -113,7 +113,7 @@ class SearchVideosTest extends TestCase
 
         $user = User::factory()->create();
         $workspace = Workspace::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($workspace, $user, 'owner');
         $video = Video::factory()->create(['workspace_id' => $workspace->id]);
         VideoInsight::create(['video_id' => $video->id, 'object_detection' => ['summary' => 'a forklift']]);
 

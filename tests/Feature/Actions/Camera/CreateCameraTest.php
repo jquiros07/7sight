@@ -21,7 +21,7 @@ class CreateCameraTest extends TestCase
         Http::fake(['*/v3/config/paths/add/*' => Http::response(status: 200)]);
         $workspace = Workspace::factory()->create();
         $user = User::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $user, 'member');
 
         $camera = (app(CreateCamera::class))($user, [
             'workspace_id' => $workspace->id,
@@ -71,7 +71,7 @@ class CreateCameraTest extends TestCase
         Http::fake();
         $workspace = Workspace::factory()->create();
         $user = User::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $user, 'member');
 
         try {
             (app(CreateCamera::class))($user, [
@@ -101,7 +101,7 @@ class CreateCameraTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $user = User::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $user, 'member');
 
         $this->expectException(ValidationException::class);
 
@@ -117,7 +117,7 @@ class CreateCameraTest extends TestCase
         Http::fake(['*' => Http::response(status: 500)]);
         $workspace = Workspace::factory()->create();
         $user = User::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $user, 'member');
 
         try {
             (app(CreateCamera::class))($user, [

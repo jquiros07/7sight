@@ -25,7 +25,7 @@ class AnalyzeVideoTest extends TestCase
 
         $workspace = Workspace::factory()->create();
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'admin');
         $video = Video::factory()->create([
             'workspace_id' => $workspace->id,
             'user_id' => $uploader->id,
@@ -52,7 +52,7 @@ class AnalyzeVideoTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'admin');
         $video = Video::factory()->create([
             'workspace_id' => $workspace->id,
             'user_id' => $uploader->id,
@@ -73,7 +73,7 @@ class AnalyzeVideoTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'admin');
         $video = Video::factory()->create([
             'workspace_id' => $workspace->id,
             'user_id' => $uploader->id,
@@ -102,7 +102,7 @@ class AnalyzeVideoTest extends TestCase
 
         $workspace = Workspace::factory()->create();
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'admin');
         $video = Video::factory()->create([
             'workspace_id' => $workspace->id,
             'user_id' => $uploader->id,
@@ -128,7 +128,7 @@ class AnalyzeVideoTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'admin');
         $video = Video::factory()->create([
             'workspace_id' => $workspace->id,
             'user_id' => $uploader->id,
@@ -150,11 +150,37 @@ class AnalyzeVideoTest extends TestCase
         $this->assertDatabaseCount('analysis_jobs', 1);
     }
 
+    /**
+     * Unlike UpdateVideo/DeleteVideo, AnalyzeVideo has no uploader bypass -
+     * it triggers real AWS Rekognition spend, so a plain member shouldn't
+     * get a free pass just by having uploaded the video.
+     */
+    public function test_a_member_uploader_cannot_analyze_their_own_video(): void
+    {
+        $workspace = Workspace::factory()->create();
+        $uploader = User::factory()->create();
+        $this->assignWorkspaceRole($workspace, $uploader, 'member');
+        $video = Video::factory()->create([
+            'workspace_id' => $workspace->id,
+            'user_id' => $uploader->id,
+            'analysis_types' => [AnalysisType::ObjectDetection->value],
+        ]);
+
+        try {
+            (new AnalyzeVideo)($uploader, $video);
+            $this->fail('Expected a 403 authorization exception.');
+        } catch (HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+        }
+
+        $this->assertDatabaseCount('analysis_jobs', 0);
+    }
+
     public function test_an_outsider_cannot_start_analysis(): void
     {
         $workspace = Workspace::factory()->create();
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'admin');
         $video = Video::factory()->create([
             'workspace_id' => $workspace->id,
             'user_id' => $uploader->id,

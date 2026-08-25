@@ -11,14 +11,15 @@ trait AuthorizesVideoAccess
     use AuthorizesWorkspaceAccess;
 
     /**
-     * Requires being the video's uploader or a workspace owner/admin.
+     * Requires being the video's uploader, or having $permission in the
+     * video's workspace.
      */
-    private function authorizeVideoManagement(User $user, Video $video): void
+    private function authorizeVideoManagement(User $user, Video $video, string $permission): void
     {
         if ($video->user_id === $user->id) {
             return;
         }
 
-        $this->authorizeRole($user, $video->workspace, ['owner', 'admin']);
+        $this->authorizePermission($user, $video->workspace, $permission);
     }
 }

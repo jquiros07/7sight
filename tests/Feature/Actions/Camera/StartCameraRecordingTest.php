@@ -21,7 +21,15 @@ class StartCameraRecordingTest extends TestCase
     private function memberOf(Camera $camera): User
     {
         $user = User::factory()->create();
-        $camera->workspace->users()->attach($user->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($camera->workspace, $user, 'member');
+
+        return $user;
+    }
+
+    private function adminOf(Camera $camera): User
+    {
+        $user = User::factory()->create();
+        $this->assignWorkspaceRole($camera->workspace, $user, 'admin');
 
         return $user;
     }
@@ -30,7 +38,7 @@ class StartCameraRecordingTest extends TestCase
     {
         Bus::fake();
         $camera = Camera::factory()->create();
-        $user = $this->memberOf($camera);
+        $user = $this->adminOf($camera);
 
         $recording = (app(StartCameraRecording::class))($user, $camera, ['duration_minutes' => 180]);
 
@@ -43,7 +51,7 @@ class StartCameraRecordingTest extends TestCase
     public function test_it_rejects_a_duration_outside_the_allowed_presets(): void
     {
         $camera = Camera::factory()->create();
-        $user = $this->memberOf($camera);
+        $user = $this->adminOf($camera);
 
         $this->expectException(ValidationException::class);
 
@@ -54,7 +62,7 @@ class StartCameraRecordingTest extends TestCase
     {
         Bus::fake();
         $camera = Camera::factory()->create();
-        $user = $this->memberOf($camera);
+        $user = $this->adminOf($camera);
         CameraRecording::factory()->create(['camera_id' => $camera->id, 'status' => CameraRecordingStatus::Recording]);
 
         try {
@@ -65,6 +73,22 @@ class StartCameraRecordingTest extends TestCase
         }
 
         $this->assertDatabaseCount('camera_recordings', 1);
+    }
+
+    public function test_a_plain_member_cannot_start_a_recording(): void
+    {
+        Bus::fake();
+        $camera = Camera::factory()->create();
+        $user = $this->memberOf($camera);
+
+        try {
+            (app(StartCameraRecording::class))($user, $camera, ['duration_minutes' => 3]);
+            $this->fail('Expected a 403 authorization exception.');
+        } catch (HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+        }
+
+        Bus::assertNotDispatched(RecordCameraFeedJob::class);
     }
 
     public function test_an_outsider_cannot_start_a_recording(): void

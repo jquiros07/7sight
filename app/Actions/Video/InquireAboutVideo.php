@@ -30,7 +30,7 @@ class InquireAboutVideo
      */
     public function __invoke(User $user, Video $video, array $input): VideoInquiry
     {
-        $this->authorizeMembership($user, $video->workspace);
+        $this->authorizePermission($user, $video->workspace, 'videos.inquire');
 
         $validated = Validator::make($input, [
             'question' => ['required', 'string', 'min:3', 'max:500'],

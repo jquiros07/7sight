@@ -18,7 +18,7 @@ class ListCamerasTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $user = User::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $user, 'member');
 
         $live = Camera::factory()->create(['workspace_id' => $workspace->id, 'name' => 'B Camera']);
         $offline = Camera::factory()->create(['workspace_id' => $workspace->id, 'name' => 'A Camera']);
@@ -46,7 +46,7 @@ class ListCamerasTest extends TestCase
         Http::fake();
         $workspace = Workspace::factory()->create();
         $user = User::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $user, 'member');
         Camera::factory()->create(['workspace_id' => $workspace->id, 'name' => 'B Camera']);
         Camera::factory()->create(['workspace_id' => $workspace->id, 'name' => 'A Camera']);
 
@@ -61,7 +61,7 @@ class ListCamerasTest extends TestCase
         $ownWorkspace = Workspace::factory()->create();
         $otherWorkspace = Workspace::factory()->create();
         $user = User::factory()->create();
-        $ownWorkspace->users()->attach($user->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($ownWorkspace, $user, 'member');
 
         $own = Camera::factory()->create(['workspace_id' => $ownWorkspace->id]);
         Camera::factory()->create(['workspace_id' => $otherWorkspace->id]);
@@ -76,7 +76,7 @@ class ListCamerasTest extends TestCase
         Http::fake(['*' => Http::response(status: 500)]);
         $workspace = Workspace::factory()->create();
         $user = User::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $user, 'member');
         Camera::factory()->create(['workspace_id' => $workspace->id]);
 
         $result = (app(ListCameras::class))($user);

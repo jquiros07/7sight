@@ -15,7 +15,7 @@ class DeleteWorkspace
      */
     public function __invoke(User $user, Workspace $workspace): void
     {
-        $this->authorizeRole($user, $workspace, ['owner']);
+        $this->authorizePermission($user, $workspace, 'workspace.delete');
 
         $workspace->delete();
     }

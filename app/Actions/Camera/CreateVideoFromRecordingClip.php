@@ -19,6 +19,9 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Sentry\Tracing\SpanContext;
+
+use function Sentry\trace;
 
 class CreateVideoFromRecordingClip
 {
@@ -74,21 +77,56 @@ class CreateVideoFromRecordingClip
 
         Storage::disk(self::DISK)->makeDirectory(dirname($clipPath));
 
-        $result = Process::timeout(120)->run([
+        Log::info('Cutting clip from camera recording', [
+            'recording_id' => $recording->id,
+            'start_seconds' => $validated['start_seconds'],
+            'end_seconds' => $validated['end_seconds'],
+        ]);
+
+        $ffmpegStartedAt = microtime(true);
+
+        // Re-encoded rather than stream-copied: the source recording inherits
+        // whatever bitrate the camera streams at, which for a raw RTSP feed
+        // can be far higher than the content needs (a 3min/400MB clip is
+        // typical straight off a copy). CRF 26 keeps quality solid for both
+        // human review and AI analysis while cutting that bitrate drastically.
+        // Wrapped in its own Sentry span - this step is slow enough now to be
+        // worth seeing separately from the rest of the request in the trace
+        // view (a timeout here previously left no trace anywhere at all).
+        $result = trace(fn () => Process::timeout(600)->run([
             'ffmpeg', '-y',
             '-ss', (string) $validated['start_seconds'],
             '-to', (string) $validated['end_seconds'],
             '-i', $sourcePath,
-            '-c', 'copy',
+            '-c:v', 'libx264',
+            '-preset', 'veryfast',
+            '-crf', '26',
+            '-c:a', 'aac',
+            '-b:a', '128k',
+            '-movflags', '+faststart',
             $absoluteClipPath,
-        ]);
+        ]), (new SpanContext)
+            ->setOp('process.ffmpeg')
+            ->setDescription('Re-encode clip from camera recording')
+            ->setData(['clip_seconds' => $clipSeconds]));
+
+        $ffmpegDurationMs = (int) round((microtime(true) - $ffmpegStartedAt) * 1000);
 
         if ($result->failed()) {
-            Log::error('Failed to cut clip from camera recording', ['recording_id' => $recording->id, 'error_output' => $result->errorOutput()]);
+            Log::error('Failed to cut clip from camera recording', [
+                'recording_id' => $recording->id,
+                'ffmpeg_duration_ms' => $ffmpegDurationMs,
+                'error_output' => $result->errorOutput(),
+            ]);
             Storage::disk(self::DISK)->delete($clipPath);
 
             abort(500, 'Could not create the clip. Please try again.');
         }
+
+        Log::info('Clip cut successfully', [
+            'recording_id' => $recording->id,
+            'ffmpeg_duration_ms' => $ffmpegDurationMs,
+        ]);
 
         $metadata = $this->inspector->inspect($absoluteClipPath);
         $sizeBytes = Storage::disk(self::DISK)->size($clipPath);

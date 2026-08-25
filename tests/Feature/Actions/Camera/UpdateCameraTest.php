@@ -18,7 +18,7 @@ class UpdateCameraTest extends TestCase
     private function memberOf(Camera $camera): User
     {
         $user = User::factory()->create();
-        $camera->workspace->users()->attach($user->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($camera->workspace, $user, 'member');
 
         return $user;
     }

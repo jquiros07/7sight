@@ -18,7 +18,7 @@ class UpdateWorkspaceTest extends TestCase
     {
         $owner = User::factory()->create();
         $workspace = Workspace::factory()->create(['owner_id' => $owner->id, 'name' => 'Old Name']);
-        $workspace->users()->attach($owner->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($workspace, $owner, 'owner');
 
         $updated = (new UpdateWorkspace)($owner, $workspace, ['name' => 'New Name']);
 
@@ -31,10 +31,8 @@ class UpdateWorkspaceTest extends TestCase
         $owner = User::factory()->create();
         $admin = User::factory()->create();
         $workspace = Workspace::factory()->create(['owner_id' => $owner->id]);
-        $workspace->users()->attach([
-            $owner->id => ['role' => 'owner'],
-            $admin->id => ['role' => 'admin'],
-        ]);
+        $this->assignWorkspaceRole($workspace, $owner, 'owner');
+        $this->assignWorkspaceRole($workspace, $admin, 'admin');
 
         $updated = (new UpdateWorkspace)($admin, $workspace, ['description' => 'Updated by admin']);
 
@@ -46,10 +44,8 @@ class UpdateWorkspaceTest extends TestCase
         $owner = User::factory()->create();
         $member = User::factory()->create();
         $workspace = Workspace::factory()->create(['owner_id' => $owner->id]);
-        $workspace->users()->attach([
-            $owner->id => ['role' => 'owner'],
-            $member->id => ['role' => 'member'],
-        ]);
+        $this->assignWorkspaceRole($workspace, $owner, 'owner');
+        $this->assignWorkspaceRole($workspace, $member, 'member');
 
         try {
             (new UpdateWorkspace)($member, $workspace, ['name' => 'Hijacked']);
@@ -64,7 +60,7 @@ class UpdateWorkspaceTest extends TestCase
         $owner = User::factory()->create();
         $outsider = User::factory()->create();
         $workspace = Workspace::factory()->create(['owner_id' => $owner->id]);
-        $workspace->users()->attach($owner->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($workspace, $owner, 'owner');
 
         try {
             (new UpdateWorkspace)($outsider, $workspace, ['name' => 'Hijacked']);
@@ -78,7 +74,7 @@ class UpdateWorkspaceTest extends TestCase
     {
         $owner = User::factory()->create();
         $workspace = Workspace::factory()->create(['owner_id' => $owner->id, 'name' => 'Acme', 'slug' => 'acme']);
-        $workspace->users()->attach($owner->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($workspace, $owner, 'owner');
 
         $updated = (new UpdateWorkspace)($owner, $workspace, ['name' => 'Acme', 'description' => 'New description']);
 
@@ -89,7 +85,7 @@ class UpdateWorkspaceTest extends TestCase
     {
         $owner = User::factory()->create();
         $workspace = Workspace::factory()->create(['owner_id' => $owner->id]);
-        $workspace->users()->attach($owner->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($workspace, $owner, 'owner');
 
         $this->expectException(ValidationException::class);
 

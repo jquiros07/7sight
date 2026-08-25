@@ -21,7 +21,7 @@ class VideoControllerTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $user = User::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $user, 'member');
         $video = Video::factory()->create([
             'workspace_id' => $workspace->id,
             'user_id' => $user->id,

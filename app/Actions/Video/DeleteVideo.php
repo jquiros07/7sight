@@ -15,7 +15,7 @@ class DeleteVideo
      */
     public function __invoke(User $user, Video $video): void
     {
-        $this->authorizeVideoManagement($user, $video);
+        $this->authorizeVideoManagement($user, $video, 'videos.delete');
 
         $video->delete();
     }

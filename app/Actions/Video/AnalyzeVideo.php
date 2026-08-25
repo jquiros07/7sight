@@ -2,7 +2,7 @@
 
 namespace App\Actions\Video;
 
-use App\Actions\Video\Concerns\AuthorizesVideoAccess;
+use App\Actions\Workspace\Concerns\AuthorizesWorkspaceAccess;
 use App\Enums\AnalysisType;
 use App\Enums\VideoStatus;
 use App\Models\AnalysisJob;
@@ -13,17 +13,19 @@ use Sentry\Tracing\SpanContext;
 
 class AnalyzeVideo
 {
-    use AuthorizesVideoAccess;
+    use AuthorizesWorkspaceAccess;
 
     private const STREAM = 'analysis_jobs';
 
     /**
-     * Queue analysis for a video's configured analysis types. Requires being the
-     * uploader or a workspace owner/admin.
+     * Queue analysis for a video's configured analysis types. Requires the
+     * videos.analyze permission - unlike update/delete, there's no uploader
+     * bypass here: this triggers real AWS Rekognition spend, so a plain
+     * member shouldn't get a free pass just by having uploaded the video.
      */
     public function __invoke(User $user, Video $video): Video
     {
-        $this->authorizeVideoManagement($user, $video);
+        $this->authorizePermission($user, $video->workspace, 'videos.analyze');
 
         $analysisTypes = $video->analysis_types ?? [];
 

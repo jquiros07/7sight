@@ -17,7 +17,7 @@ class ListVideosTest extends TestCase
     {
         $user = User::factory()->create();
         $ownWorkspace = Workspace::factory()->create();
-        $ownWorkspace->users()->attach($user->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($ownWorkspace, $user, 'owner');
         $ownVideo = Video::factory()->create(['workspace_id' => $ownWorkspace->id]);
         Video::factory()->create();
 
@@ -31,7 +31,7 @@ class ListVideosTest extends TestCase
     {
         $user = User::factory()->create();
         $workspace = Workspace::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($workspace, $user, 'owner');
         $matching = Video::factory()->create(['workspace_id' => $workspace->id, 'title' => 'Loading Dock Camera']);
         Video::factory()->create(['workspace_id' => $workspace->id, 'title' => 'Front Entrance']);
 
@@ -45,7 +45,7 @@ class ListVideosTest extends TestCase
     {
         $user = User::factory()->create();
         $workspace = Workspace::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($workspace, $user, 'owner');
         $short = Video::factory()->create(['workspace_id' => $workspace->id, 'duration_seconds' => 30]);
         Video::factory()->create(['workspace_id' => $workspace->id, 'duration_seconds' => 600]);
 
@@ -59,7 +59,7 @@ class ListVideosTest extends TestCase
     {
         $user = User::factory()->create();
         $workspace = Workspace::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($workspace, $user, 'owner');
         Video::factory()->create(['workspace_id' => $workspace->id, 'title' => 'B Video']);
         Video::factory()->create(['workspace_id' => $workspace->id, 'title' => 'A Video']);
 
@@ -72,7 +72,7 @@ class ListVideosTest extends TestCase
     {
         $user = User::factory()->create();
         $workspace = Workspace::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($workspace, $user, 'owner');
         Video::factory()->count(3)->create(['workspace_id' => $workspace->id]);
 
         $results = (new ListVideos)($user, ['per_page' => 500]);

@@ -24,7 +24,15 @@ class CreateVideoFromRecordingClipTest extends TestCase
     private function memberOf(Camera $camera): User
     {
         $user = User::factory()->create();
-        $camera->workspace->users()->attach($user->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($camera->workspace, $user, 'member');
+
+        return $user;
+    }
+
+    private function adminOf(Camera $camera): User
+    {
+        $user = User::factory()->create();
+        $this->assignWorkspaceRole($camera->workspace, $user, 'admin');
 
         return $user;
     }
@@ -154,6 +162,12 @@ class CreateVideoFromRecordingClipTest extends TestCase
         ]);
     }
 
+    /**
+     * auto_start_analysis internally calls AnalyzeVideo, which requires the
+     * videos.analyze permission (admin+, no uploader bypass) - so this needs
+     * an admin actor, unlike every other test in this file which is
+     * deliberately just a member (clip creation itself stays member-accessible).
+     */
     public function test_it_starts_analysis_when_auto_start_analysis_is_true(): void
     {
         Storage::fake('local');
@@ -165,7 +179,7 @@ class CreateVideoFromRecordingClipTest extends TestCase
         Redis::shouldReceive('xadd')->once();
 
         $camera = Camera::factory()->create();
-        $user = $this->memberOf($camera);
+        $user = $this->adminOf($camera);
         $recording = $this->completedRecording($camera);
 
         $video = (app(CreateVideoFromRecordingClip::class))($user, $camera, $recording, [

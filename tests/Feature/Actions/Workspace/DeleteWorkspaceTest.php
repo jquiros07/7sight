@@ -18,7 +18,7 @@ class DeleteWorkspaceTest extends TestCase
     {
         $owner = User::factory()->create();
         $workspace = Workspace::factory()->create(['owner_id' => $owner->id]);
-        $workspace->users()->attach($owner->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($workspace, $owner, 'owner');
 
         (new DeleteWorkspace)($owner, $workspace);
 
@@ -29,7 +29,7 @@ class DeleteWorkspaceTest extends TestCase
     {
         $owner = User::factory()->create();
         $workspace = Workspace::factory()->create(['owner_id' => $owner->id]);
-        $workspace->users()->attach($owner->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($workspace, $owner, 'owner');
         $video = Video::factory()->create(['workspace_id' => $workspace->id]);
 
         (new DeleteWorkspace)($owner, $workspace);
@@ -42,10 +42,8 @@ class DeleteWorkspaceTest extends TestCase
         $owner = User::factory()->create();
         $admin = User::factory()->create();
         $workspace = Workspace::factory()->create(['owner_id' => $owner->id]);
-        $workspace->users()->attach([
-            $owner->id => ['role' => 'owner'],
-            $admin->id => ['role' => 'admin'],
-        ]);
+        $this->assignWorkspaceRole($workspace, $owner, 'owner');
+        $this->assignWorkspaceRole($workspace, $admin, 'admin');
 
         try {
             (new DeleteWorkspace)($admin, $workspace);
@@ -62,10 +60,8 @@ class DeleteWorkspaceTest extends TestCase
         $owner = User::factory()->create();
         $member = User::factory()->create();
         $workspace = Workspace::factory()->create(['owner_id' => $owner->id]);
-        $workspace->users()->attach([
-            $owner->id => ['role' => 'owner'],
-            $member->id => ['role' => 'member'],
-        ]);
+        $this->assignWorkspaceRole($workspace, $owner, 'owner');
+        $this->assignWorkspaceRole($workspace, $member, 'member');
 
         try {
             (new DeleteWorkspace)($member, $workspace);

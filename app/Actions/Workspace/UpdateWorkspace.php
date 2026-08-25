@@ -23,7 +23,7 @@ class UpdateWorkspace
      */
     public function __invoke(User $user, Workspace $workspace, array $input): Workspace
     {
-        $this->authorizeRole($user, $workspace, ['owner', 'admin']);
+        $this->authorizePermission($user, $workspace, 'workspace.update');
 
         $validated = Validator::make($input, [
             'name' => ['sometimes', 'required', 'string', 'max:255'],

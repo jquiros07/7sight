@@ -36,6 +36,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/recordings/{recording}/cancel', [CameraRecordingController::class, 'cancel']);
         Route::post('/recordings/{recording}/clip', [CameraRecordingController::class, 'clip']);
         Route::get('/recordings/{recording}/download', [CameraRecordingController::class, 'download']);
+        Route::get('/recordings/{recording}/stream', [CameraRecordingController::class, 'stream']);
     });
 });
 

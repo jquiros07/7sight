@@ -21,15 +21,17 @@ if config.SENTRY_DSN:
     sentry_sdk.init(
         dsn=config.SENTRY_DSN,
         traces_sample_rate=config.SENTRY_TRACES_SAMPLE_RATE,
-        # Without enable_logs, the stdlib logger.info() calls throughout this
-        # file only ever became breadcrumbs (attached to a future error event)
-        # - never their own searchable entries in Sentry's Logs product.
-        enable_logs=True,
         integrations=[
             LoggingIntegration(
                 sentry_logs_level=logging.INFO,  # stdlib records -> Sentry Logs
                 level=logging.INFO,  # stdlib records -> breadcrumbs (unchanged default)
                 event_level=logging.ERROR,  # stdlib records -> Sentry error events (unchanged default)
+                # Without this, sentry_logs_level above only sets the handler's
+                # threshold - SentryLogsHandler.emit() still no-ops on every
+                # record unless this is also True, so no logs actually reach
+                # Sentry's Logs product. (init()'s own enable_logs kwarg looks
+                # like it should do this but is a dead no-op in sentry-sdk 2.x.)
+                capture_sentry_logs=True,
             ),
         ],
     )

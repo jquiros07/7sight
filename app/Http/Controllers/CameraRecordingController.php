@@ -7,6 +7,7 @@ use App\Actions\Camera\CreateVideoFromRecordingClip;
 use App\Actions\Camera\DownloadCameraRecording;
 use App\Actions\Camera\ListCameraRecordings;
 use App\Actions\Camera\StartCameraRecording;
+use App\Actions\Camera\StreamCameraRecording;
 use App\Models\Camera;
 use App\Models\CameraRecording;
 use Illuminate\Http\Request;
@@ -86,6 +87,19 @@ class CameraRecordingController extends Controller
     {
         try {
             return $downloadCameraRecording($request->user(), $camera, $recording);
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function stream(Request $request, Camera $camera, CameraRecording $recording, StreamCameraRecording $streamCameraRecording)
+    {
+        try {
+            return $streamCameraRecording($request->user(), $camera, $recording);
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
         } catch (Throwable $e) {

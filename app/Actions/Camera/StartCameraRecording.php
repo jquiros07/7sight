@@ -29,7 +29,7 @@ class StartCameraRecording
      */
     public function __invoke(User $user, Camera $camera, array $input): CameraRecording
     {
-        $this->authorizeCameraAccess($user, $camera);
+        $this->authorizePermission($user, $camera->workspace, 'recordings.start');
 
         $validated = Validator::make($input, [
             'duration_minutes' => ['required', 'integer', Rule::in(self::ALLOWED_DURATION_MINUTES)],

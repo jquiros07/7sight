@@ -18,7 +18,7 @@ class DeleteVideoTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'member');
         $video = Video::factory()->create(['workspace_id' => $workspace->id, 'user_id' => $uploader->id]);
 
         (new DeleteVideo)($uploader, $video);
@@ -30,9 +30,9 @@ class DeleteVideoTest extends TestCase
     {
         $owner = User::factory()->create();
         $workspace = Workspace::factory()->create(['owner_id' => $owner->id]);
-        $workspace->users()->attach($owner->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($workspace, $owner, 'owner');
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'member');
         $video = Video::factory()->create(['workspace_id' => $workspace->id, 'user_id' => $uploader->id]);
 
         (new DeleteVideo)($owner, $video);
@@ -44,9 +44,9 @@ class DeleteVideoTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $admin = User::factory()->create();
-        $workspace->users()->attach($admin->id, ['role' => 'admin']);
+        $this->assignWorkspaceRole($workspace, $admin, 'admin');
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'member');
         $video = Video::factory()->create(['workspace_id' => $workspace->id, 'user_id' => $uploader->id]);
 
         (new DeleteVideo)($admin, $video);
@@ -58,9 +58,9 @@ class DeleteVideoTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $member = User::factory()->create();
-        $workspace->users()->attach($member->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $member, 'member');
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'member');
         $video = Video::factory()->create(['workspace_id' => $workspace->id, 'user_id' => $uploader->id]);
 
         try {
@@ -77,7 +77,7 @@ class DeleteVideoTest extends TestCase
     {
         $workspace = Workspace::factory()->create();
         $uploader = User::factory()->create();
-        $workspace->users()->attach($uploader->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $uploader, 'member');
         $video = Video::factory()->create(['workspace_id' => $workspace->id, 'user_id' => $uploader->id]);
         $outsider = User::factory()->create();
 

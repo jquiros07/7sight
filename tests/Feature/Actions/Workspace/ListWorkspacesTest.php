@@ -16,7 +16,7 @@ class ListWorkspacesTest extends TestCase
     {
         $user = User::factory()->create();
         $ownWorkspace = Workspace::factory()->create();
-        $ownWorkspace->users()->attach($user->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($ownWorkspace, $user, 'owner');
         Workspace::factory()->create();
 
         $results = (new ListWorkspaces)($user);
@@ -29,9 +29,9 @@ class ListWorkspacesTest extends TestCase
     {
         $user = User::factory()->create();
         $matching = Workspace::factory()->create(['name' => 'Downtown Cameras']);
-        $matching->users()->attach($user->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($matching, $user, 'owner');
         $nonMatching = Workspace::factory()->create(['name' => 'Warehouse']);
-        $nonMatching->users()->attach($user->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($nonMatching, $user, 'owner');
 
         $results = (new ListWorkspaces)($user, ['search' => 'Downtown']);
 
@@ -43,9 +43,9 @@ class ListWorkspacesTest extends TestCase
     {
         $user = User::factory()->create();
         $b = Workspace::factory()->create(['name' => 'B Workspace']);
-        $b->users()->attach($user->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($b, $user, 'owner');
         $a = Workspace::factory()->create(['name' => 'A Workspace']);
-        $a->users()->attach($user->id, ['role' => 'owner']);
+        $this->assignWorkspaceRole($a, $user, 'owner');
 
         $results = (new ListWorkspaces)($user, ['sort' => 'name', 'direction' => 'asc']);
 
@@ -56,7 +56,7 @@ class ListWorkspacesTest extends TestCase
     {
         $user = User::factory()->create();
         Workspace::factory()->count(3)->create()->each(
-            fn (Workspace $workspace) => $workspace->users()->attach($user->id, ['role' => 'owner'])
+            fn (Workspace $workspace) => $this->assignWorkspaceRole($workspace, $user, 'owner')
         );
 
         $results = (new ListWorkspaces)($user, ['per_page' => 500]);

@@ -24,7 +24,7 @@ class UpdateVideo
      */
     public function __invoke(User $user, Video $video, array $input): Video
     {
-        $this->authorizeVideoManagement($user, $video);
+        $this->authorizeVideoManagement($user, $video, 'videos.update');
 
         $validator = Validator::make($input, array_merge([
             'title' => ['sometimes', 'required', 'string', 'max:255'],

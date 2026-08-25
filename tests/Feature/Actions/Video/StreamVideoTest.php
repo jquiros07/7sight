@@ -21,7 +21,7 @@ class StreamVideoTest extends TestCase
         Storage::fake('local');
         $workspace = Workspace::factory()->create();
         $member = User::factory()->create();
-        $workspace->users()->attach($member->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $member, 'member');
         $video = Video::factory()->create([
             'workspace_id' => $workspace->id,
             'disk' => 'local',

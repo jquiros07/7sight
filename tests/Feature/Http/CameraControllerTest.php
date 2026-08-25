@@ -26,7 +26,7 @@ class CameraControllerTest extends TestCase
         Http::fake();
         $workspace = Workspace::factory()->create();
         $user = User::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $user, 'member');
         $camera = Camera::factory()->create([
             'workspace_id' => $workspace->id,
             'name' => 'Old Name',
@@ -46,7 +46,7 @@ class CameraControllerTest extends TestCase
         Http::fake(['*/v3/config/paths/add/*' => Http::response(status: 200)]);
         $workspace = Workspace::factory()->create();
         $user = User::factory()->create();
-        $workspace->users()->attach($user->id, ['role' => 'member']);
+        $this->assignWorkspaceRole($workspace, $user, 'member');
 
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/cameras', [
             'workspace_id' => $workspace->id,
