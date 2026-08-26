@@ -1,4 +1,4 @@
-import Hls from 'hls.js';
+import type HlsType from 'hls.js';
 import { VideoOff } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -12,23 +12,34 @@ export function CameraPlayer({ hlsUrl, isLive, name }: { hlsUrl: string; isLive:
 
         setErrored(false);
 
-        if (Hls.isSupported()) {
-            const hls = new Hls();
-            hls.on(Hls.Events.ERROR, (_event, data) => {
-                if (data.fatal) setErrored(true);
-            });
-            hls.loadSource(hlsUrl);
-            hls.attachMedia(video);
-
-            return () => hls.destroy();
-        }
-
-        // Safari plays HLS natively without hls.js.
+        // Safari plays HLS natively without hls.js - skip loading the library entirely.
         if (video.canPlayType('application/vnd.apple.mpegurl')) {
             video.src = hlsUrl;
-        } else {
-            setErrored(true);
+            return;
         }
+
+        let cancelled = false;
+        let hls: HlsType | undefined;
+
+        import('hls.js').then(({ default: Hls }) => {
+            if (cancelled || !video) return;
+
+            if (Hls.isSupported()) {
+                hls = new Hls();
+                hls.on(Hls.Events.ERROR, (_event, data) => {
+                    if (data.fatal) setErrored(true);
+                });
+                hls.loadSource(hlsUrl);
+                hls.attachMedia(video);
+            } else {
+                setErrored(true);
+            }
+        });
+
+        return () => {
+            cancelled = true;
+            hls?.destroy();
+        };
     }, [hlsUrl, isLive]);
 
     const offline = !isLive || errored;

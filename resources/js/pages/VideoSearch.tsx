@@ -5,12 +5,11 @@ import { Loader2, Search as SearchIcon, SearchX, Sparkles } from 'lucide-react';
 import { api } from '../lib/api';
 import { getErrorMessages } from '../lib/errors';
 import { cn } from '../lib/utils';
+import { VIDEO_STATUS_STYLES as STATUS_STYLES, type VideoStatus } from '../lib/videoStatus';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-
-type VideoStatus = 'uploaded' | 'processing' | 'ready' | 'failed';
 
 type Relevance = 'HIGH' | 'MEDIUM' | 'LOW';
 
@@ -27,13 +26,6 @@ type SearchResponse = {
     query: string;
     candidates_searched: number;
     matches: SearchMatch[];
-};
-
-const STATUS_STYLES: Record<VideoStatus, { label: string; className: string }> = {
-    uploaded: { label: 'Uploaded', className: 'bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-400' },
-    processing: { label: 'Processing', className: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400' },
-    ready: { label: 'Analyzed', className: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' },
-    failed: { label: 'Failed', className: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' },
 };
 
 const RELEVANCE_STYLES: Record<Relevance, string> = {

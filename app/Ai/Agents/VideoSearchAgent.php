@@ -5,7 +5,9 @@ namespace App\Ai\Agents;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Attributes\Model;
 use Laravel\Ai\Attributes\Provider;
+use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
@@ -13,9 +15,32 @@ use Stringable;
 
 #[Provider(Lab::Gemini)]
 #[Model('gemini-3.6-flash')]
-class VideoSearchAgent implements Agent, HasStructuredOutput
+#[Timeout(120)]
+class VideoSearchAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use Promptable;
+
+    /**
+     * Get the provider-specific options to be passed to the provider.
+     *
+     * Caps Gemini's extended "thinking" to its minimum for this agent -
+     * matching a query against already-generated insight summaries doesn't
+     * need deliberate reasoning, and thinking was the source of highly
+     * variable (3s-90s+) response times. gemini-3.6-flash rejects a budget
+     * of 0 (a full disable) with a 400, so 1 is the lowest accepted value.
+     *
+     * @return array<string, mixed>
+     */
+    public function providerOptions(Lab|string $provider): array
+    {
+        if ($provider !== Lab::Gemini) {
+            return [];
+        }
+
+        return [
+            'thinkingConfig' => ['thinkingBudget' => 1],
+        ];
+    }
 
     /**
      * Get the instructions that the agent should follow.

@@ -22,6 +22,11 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// Pages rendered for guests only - loading them never needs to know who's
+// logged in, so skip the /api/user check entirely rather than firing it on
+// every page load regardless of route.
+const GUEST_ONLY_PATHS = ['/', '/login', '/register'];
+
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [permissions, setPermissions] = useState<WorkspacePermissions>({});
@@ -37,6 +42,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     useEffect(() => {
+        if (GUEST_ONLY_PATHS.includes(window.location.pathname)) {
+            setLoading(false);
+            return;
+        }
+
         api.get<User>('/api/user')
             .then((res) => {
                 setUser(res.data);

@@ -72,7 +72,7 @@ class GenerateWorkspaceInsightSummary
         return retry(
             times: 3,
             callback: fn () => (new WorkspaceInsightSummaryAgent)->prompt(json_encode($data, JSON_PRETTY_PRINT))->toArray(),
-            sleepMilliseconds: fn (int $attempt) => $attempt * 500,
+            sleepMilliseconds: fn (int $attempt) => $attempt * 2000,
             when: fn (Throwable $e) => $e instanceof RateLimitedException || $e instanceof ProviderOverloadedException,
         );
     }

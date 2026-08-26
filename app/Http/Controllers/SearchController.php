@@ -13,7 +13,7 @@ class SearchController extends Controller
     {
         try {
             return response()->json($searchVideos($request->user(), [
-                'query' => $request->query,
+                'query' => $request->input('query'),
             ]));
         } catch (ValidationException $e) {
             return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], $e->status);

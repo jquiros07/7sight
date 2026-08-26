@@ -9,6 +9,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { cn } from '../lib/utils';
 import { getErrorMessages } from '../lib/errors';
+import { formatDuration, formatFileSize } from '../lib/format';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -236,24 +237,6 @@ function TimestampButton({ seconds, onSeek }: { seconds: number; onSeek: (second
             {formatSeconds(seconds)}
         </button>
     );
-}
-
-function formatDuration(totalSeconds: number | null): string {
-    if (totalSeconds === null) return '—';
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = Math.floor(totalSeconds % 60);
-    if (hours > 0) {
-        return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-    }
-    return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
-
-function formatFileSize(bytes: number): string {
-    if (bytes === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
 // Caps how many bars the chart draws — with a lot of distinct labels an

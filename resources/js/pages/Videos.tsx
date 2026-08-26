@@ -6,6 +6,7 @@ import { HSOverlay } from 'preline';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { getErrorMessages } from '../lib/errors';
+import { formatDuration, formatFileSize } from '../lib/format';
 import { cn } from '../lib/utils';
 import { ActionButton } from '@/components/ui/action-button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -57,24 +58,6 @@ const EMPTY_FILTERS: VideoFilters = {
     sizeMin: '',
     sizeMax: '',
 };
-
-function formatDuration(totalSeconds: number | null): string {
-    if (totalSeconds === null) return '—';
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = Math.floor(totalSeconds % 60);
-    if (hours > 0) {
-        return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-    }
-    return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
-
-function formatFileSize(bytes: number): string {
-    if (bytes === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
 
 const STATUS_BADGES: Record<VideoStatus, { label: string; className: string; icon?: 'dot' | 'spinner' }> = {
     uploaded: {

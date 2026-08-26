@@ -21,6 +21,7 @@ import {
 import { cssVarToValue } from 'preline/helpers/apexcharts';
 import { api } from '../lib/api';
 import { getErrorMessages } from '../lib/errors';
+import { formatChartDate, formatFileSize } from '../lib/format';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -77,24 +78,12 @@ type WorkspaceDashboardData = {
     needs_review: NeedsReviewItem[];
 };
 
-function formatFileSize(bytes: number): string {
-    if (bytes === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
 function formatDurationShort(totalSeconds: number | null): string {
     if (totalSeconds === null) return '—';
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = Math.round(totalSeconds % 60);
     if (minutes === 0) return `${seconds}s`;
     return `${minutes}m ${seconds}s`;
-}
-
-function formatChartDate(dateStr: string): string {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 function StatCard({ icon, label, value, caption, tone = 'default' }: { icon: ReactNode; label: string; value: number | string; caption?: string; tone?: 'default' | 'warning' }) {

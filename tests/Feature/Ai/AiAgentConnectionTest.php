@@ -2,11 +2,16 @@
 
 namespace Tests\Feature\Ai;
 
+use App\Ai\Agents\ContentModerationAgent;
+use App\Ai\Agents\ObjectDetectionAgent;
+use App\Ai\Agents\TextDetectionAgent;
+use App\Ai\Agents\ThreatDetectionAgent;
 use App\Ai\Agents\VideoSearchAgent;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Attributes\Model as ModelAttribute;
 use Laravel\Ai\Attributes\Provider as ProviderAttribute;
+use Laravel\Ai\Attributes\Timeout as TimeoutAttribute;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Responses\AgentResponse;
@@ -76,6 +81,30 @@ class AiAgentConnectionTest extends TestCase
             foreach ($schema as $field => $type) {
                 $this->assertInstanceOf(Type::class, $type, "$class's schema field \"$field\" must be a JSON schema Type.");
             }
+        }
+    }
+
+    /**
+     * These agents' real Gemini calls have been observed taking longer than
+     * the laravel/ai package's 60s default timeout - each must declare an
+     * explicit #[Timeout] override so a legitimately slow (not rate-limited)
+     * response doesn't get killed client-side.
+     */
+    public function test_agents_with_slow_real_world_latency_declare_a_longer_timeout(): void
+    {
+        $agentsNeedingLongerTimeout = [
+            ObjectDetectionAgent::class,
+            ThreatDetectionAgent::class,
+            ContentModerationAgent::class,
+            TextDetectionAgent::class,
+            VideoSearchAgent::class,
+        ];
+
+        foreach ($agentsNeedingLongerTimeout as $class) {
+            $attributes = (new ReflectionClass($class))->getAttributes(TimeoutAttribute::class);
+
+            $this->assertNotEmpty($attributes, "$class must declare a #[Timeout] override longer than the package's 60s default.");
+            $this->assertGreaterThan(60, $attributes[0]->newInstance()->value, "$class's #[Timeout] must be greater than the package's 60s default.");
         }
     }
 

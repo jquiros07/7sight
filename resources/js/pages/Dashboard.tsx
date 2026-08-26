@@ -26,13 +26,13 @@ import { api } from '../lib/api';
 import { getErrorMessages } from '../lib/errors';
 import { cn } from '../lib/utils';
 import { useAuth } from '../lib/auth';
+import { VIDEO_STATUS_STYLES as STATUS_STYLES, type VideoStatus } from '../lib/videoStatus';
+import { formatChartDate, formatFileSize } from '../lib/format';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApexChart } from '@/components/ui/chart';
 import { Progress } from '@/components/ui/progress';
-
-type VideoStatus = 'uploaded' | 'processing' | 'ready' | 'failed';
 
 type AnalysisJobType = 'object_detection' | 'threat_detection' | 'content_moderation' | 'text_detection';
 
@@ -126,13 +126,6 @@ const SEVERITY_STYLES: Record<string, string> = {
     NONE: 'bg-slate-100 text-slate-800 dark:bg-slate-500/20 dark:text-slate-400',
 };
 
-const STATUS_STYLES: Record<VideoStatus, { label: string; className: string }> = {
-    uploaded: { label: 'Uploaded', className: 'bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-400' },
-    processing: { label: 'Processing', className: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400' },
-    ready: { label: 'Analyzed', className: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' },
-    failed: { label: 'Failed', className: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' },
-};
-
 // Small deterministic tips derived from stats already in the dashboard
 // payload - no extra AI call, so this is always available and instant.
 function computeSuggestions(dashboard: DashboardData): Suggestion[] {
@@ -221,18 +214,6 @@ function SuggestionBox({ suggestion }: { suggestion: Suggestion }) {
             <p className="text-sm text-foreground">{suggestion.text}</p>
         </div>
     );
-}
-
-function formatFileSize(bytes: number): string {
-    if (bytes === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
-function formatChartDate(dateStr: string): string {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 function StatCell({ icon, label, value, tone = 'default' }: { icon: ReactNode; label: string; value: string; tone?: 'default' | 'warning' }) {

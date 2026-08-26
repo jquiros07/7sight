@@ -5,6 +5,7 @@ namespace App\Ai\Agents;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Attributes\Model;
 use Laravel\Ai\Attributes\Provider;
+use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Enums\Lab;
@@ -13,6 +14,7 @@ use Stringable;
 
 #[Provider(Lab::Gemini)]
 #[Model('gemini-3.6-flash')]
+#[Timeout(120)]
 class TextDetectionAgent implements Agent, HasStructuredOutput
 {
     use Promptable;

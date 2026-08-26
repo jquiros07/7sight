@@ -17,6 +17,20 @@ class GenerateVideoInsightsJob implements ShouldQueue
         public Video $video,
     ) {}
 
+    /**
+     * Delay (seconds) before each queue-level retry. This runs between
+     * separate job executions rather than inside one, so unlike the
+     * agent-level retry in GenerateVideoInsights it can afford to actually
+     * wait out a per-minute Gemini rate-limit window without risking the
+     * worker's per-execution timeout.
+     *
+     * @return array<int, int>
+     */
+    public function backoff(): array
+    {
+        return [20, 60];
+    }
+
     public function handle(GenerateVideoInsights $generateVideoInsights): void
     {
         Log::info('GenerateVideoInsightsJob started', ['video_id' => $this->video->id]);

@@ -6,6 +6,7 @@ import { AnalysisSettingsFields } from '@/components/AnalysisSettingsFields';
 import { useAnalysisSettings } from '@/hooks/useAnalysisSettings';
 import { api } from '../lib/api';
 import { getErrorMessages } from '../lib/errors';
+import { formatFileSize } from '../lib/format';
 import { cn } from '../lib/utils';
 import { ChevronLeft, ChevronRight, FileVideo, Upload, X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -22,13 +23,6 @@ const WIZARD_STEPS = [
     { index: 1, label: 'Video details' },
     { index: 2, label: 'Analysis settings' },
 ] as const;
-
-function formatFileSize(bytes: number): string {
-    if (bytes === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
 
 function titleFromFilename(filename: string): string {
     return filename.replace(/\.[^/.]+$/, '');

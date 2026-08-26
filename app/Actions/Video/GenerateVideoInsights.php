@@ -127,7 +127,7 @@ class GenerateVideoInsights
         $result = retry(
             times: 3,
             callback: fn () => $agent->prompt(json_encode($data, JSON_PRETTY_PRINT))->toArray(),
-            sleepMilliseconds: fn (int $attempt) => $attempt * 500,
+            sleepMilliseconds: fn (int $attempt) => $attempt * 2000,
             when: function (Throwable $e) use ($agentName) {
                 $retryable = $e instanceof RateLimitedException || $e instanceof ProviderOverloadedException;
                 Log::info('Insights agent call failed', ['agent' => $agentName, 'retrying' => $retryable, 'error' => $e->getMessage()]);

@@ -130,9 +130,13 @@ not one generic one, matched to what each analysis type actually produces:
 
 Insights can be generated for a single analysis type or all of them at once,
 and every generated insight is persisted (`video_insights`) for later
-reference. If generation fails after exhausting retries, the results page
-shows the failure plainly with a one-click retry, rather than leaving the
-page stuck on "not ready yet" indefinitely.
+reference. Each agent call is retried with backoff on a transient AI-provider
+rate limit or overload, and the queue job itself backs off further (20s, then
+60s) between retries — long enough to ride out a provider rate-limit window
+under concurrent load, since several videos can be analyzed at once. If
+generation still fails after exhausting retries, the results page shows the
+failure plainly with a one-click retry, rather than leaving the page stuck on
+"not ready yet" indefinitely.
 
 **Report export** — download a PDF summary of a video's analysis results and
 AI insights (overview, per-label bar charts, threat/moderation assessments,
