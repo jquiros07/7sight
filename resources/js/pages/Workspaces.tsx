@@ -4,6 +4,7 @@ import { AppLayout } from '@/components/AppLayout';
 import { LayoutDashboard, Loader2, Pencil, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { HSOverlay } from 'preline';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { getErrorMessages } from '../lib/errors';
 import { cn } from '../lib/utils';
 import { ActionButton } from '@/components/ui/action-button';
@@ -76,6 +77,7 @@ function SortButton({
 export default function Workspaces() {
     const navigate = useNavigate();
     const location = useLocation();
+    const { can } = useAuth();
     const [workspaces, setWorkspaces] = useState<PaginatedWorkspaces | null>(null);
     const [page, setPage] = useState(1);
     const [sort, setSort] = useState<SortField>('created_at');
@@ -326,7 +328,7 @@ export default function Workspaces() {
                                                     onClick={() => navigate(`/workspaces/${workspace.id}/dashboard`)}
                                                     hoverClassName="hover:text-primary"
                                                 />
-                                                {(workspace.pivot.role === 'owner' || workspace.pivot.role === 'admin') && (
+                                                {can(workspace.id, 'workspace.update') && (
                                                     <ActionButton
                                                         icon={<Pencil className="size-4" strokeWidth={1.75} />}
                                                         label="Edit"
@@ -335,7 +337,7 @@ export default function Workspaces() {
                                                         hoverClassName="hover:text-primary"
                                                     />
                                                 )}
-                                                {workspace.pivot.role === 'owner' && (
+                                                {can(workspace.id, 'workspace.delete') && (
                                                     <ActionButton
                                                         icon={<Trash2 className="size-4" strokeWidth={1.75} />}
                                                         label="Delete"

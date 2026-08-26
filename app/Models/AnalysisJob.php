@@ -20,6 +20,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'raw_output_path',
     'started_at',
     'completed_at',
+    'flagged_for_review_at',
+    'flagged_by',
+    'flagged_review_note',
 ])]
 class AnalysisJob extends Model
 {
@@ -36,6 +39,7 @@ class AnalysisJob extends Model
             'attempts' => 'integer',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
+            'flagged_for_review_at' => 'datetime',
         ];
     }
 
@@ -47,5 +51,16 @@ class AnalysisJob extends Model
     public function results(): HasMany
     {
         return $this->hasMany(AnalysisResult::class);
+    }
+
+    /**
+     * Named flaggedByUser (not flaggedBy) so its serialized key doesn't
+     * collide with the raw flagged_by foreign key column - Eloquent snake
+     * cases relation names, so flaggedBy() would serialize to the same
+     * "flagged_by" key as the column and silently mask it whenever loaded.
+     */
+    public function flaggedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'flagged_by');
     }
 }

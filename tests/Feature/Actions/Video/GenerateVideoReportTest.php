@@ -3,6 +3,7 @@
 namespace Tests\Feature\Actions\Video;
 
 use App\Actions\Video\GenerateVideoReport;
+use App\Models\AnalysisJob;
 use App\Models\User;
 use App\Models\Video;
 use App\Models\Workspace;
@@ -29,6 +30,34 @@ class GenerateVideoReportTest extends TestCase
         $member = User::factory()->create();
         $this->assignWorkspaceRole($workspace, $member, 'member');
         $video = Video::factory()->create(['workspace_id' => $workspace->id]);
+
+        $pdf = (app(GenerateVideoReport::class))($member, $video);
+
+        $bytes = base64_decode($pdf->base64());
+
+        $this->assertNotEmpty($bytes);
+        $this->assertStringStartsWith('%PDF-', $bytes);
+    }
+
+    /**
+     * Renders a real PDF (see the note above on why this isn't mocked) for a
+     * video with a flagged job, to catch a Blade error in the flag markup -
+     * e.g. calling ->format() on a null flagged_for_review_at, or referencing
+     * flaggedByUser when it wasn't eager-loaded.
+     */
+    public function test_it_renders_a_flagged_analysis_job_in_the_pdf(): void
+    {
+        $workspace = Workspace::factory()->create();
+        $member = User::factory()->create();
+        $this->assignWorkspaceRole($workspace, $member, 'member');
+        $video = Video::factory()->create(['workspace_id' => $workspace->id]);
+        AnalysisJob::factory()->create([
+            'video_id' => $video->id,
+            'status' => 'completed',
+            'flagged_for_review_at' => now(),
+            'flagged_by' => $member->id,
+            'flagged_review_note' => 'Missed a weapon at 1:32',
+        ]);
 
         $pdf = (app(GenerateVideoReport::class))($member, $video);
 

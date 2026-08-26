@@ -10,5 +10,8 @@ export function getErrorMessages(error: unknown, fallback = 'Something went wron
             return [data.message];
         }
     }
+    if (axios.isAxiosError(error) && error.response?.status === 403) {
+        return ["You don't have permission to do this. Ask a workspace admin for access."];
+    }
     return [fallback];
 }

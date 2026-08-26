@@ -287,7 +287,20 @@
             <h3>
                 {{ $typeLabels[$job->type->value] ?? $job->type->value }}
                 <span class="muted" style="font-weight: 400;">— {{ ucfirst($job->status) }}</span>
+                @if ($job->flagged_for_review_at)
+                    <span class="badge" style="background: #92400e;">Flagged for review</span>
+                @endif
             </h3>
+
+            @if ($job->flagged_for_review_at)
+                <p class="muted">
+                    Flagged for human review{{ $job->flaggedByUser ? " by {$job->flaggedByUser->name}" : '' }}
+                    on {{ $job->flagged_for_review_at->format('M j, Y g:i A') }}.
+                </p>
+                @if ($job->flagged_review_note)
+                    <p><em>&ldquo;{{ $job->flagged_review_note }}&rdquo;</em></p>
+                @endif
+            @endif
 
             @if ($job->status === 'failed')
                 <p class="muted">{{ $job->error_message ?? 'Analysis failed.' }}</p>

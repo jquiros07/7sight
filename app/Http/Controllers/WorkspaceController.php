@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Workspace\CreateWorkspace;
 use App\Actions\Workspace\DeleteWorkspace;
+use App\Actions\Workspace\GenerateWorkspaceDashboardReport;
 use App\Actions\Workspace\GenerateWorkspaceInsightSummary;
 use App\Actions\Workspace\ListWorkspaces;
 use App\Actions\Workspace\ShowWorkspace;
@@ -61,6 +62,19 @@ class WorkspaceController extends Controller
     {
         try {
             return response()->json($showWorkspaceDashboard($request->user(), $workspace));
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function dashboardReport(Request $request, Workspace $workspace, GenerateWorkspaceDashboardReport $generateWorkspaceDashboardReport)
+    {
+        try {
+            return $generateWorkspaceDashboardReport($request->user(), $workspace);
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
         } catch (Throwable $e) {

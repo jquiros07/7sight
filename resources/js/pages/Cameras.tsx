@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { getErrorMessages } from '../lib/errors';
 
 const MAX_CAMERAS = 5;
@@ -23,6 +24,7 @@ type Camera = {
     id: number;
     name: string;
     location: string | null;
+    workspace_id: number | null;
     workspace: string | null;
     created_by: string | null;
     created_at: string;
@@ -34,6 +36,7 @@ type Camera = {
 export default function Cameras() {
     const navigate = useNavigate();
     const location = useLocation();
+    const { can } = useAuth();
     const [cameras, setCameras] = useState<Camera[]>([]);
     const [loading, setLoading] = useState(true);
     const [listError, setListError] = useState<string[]>([]);
@@ -170,7 +173,10 @@ export default function Cameras() {
 
             {!loading && cameras.length > 0 && (
                 <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {cameras.map((camera) => (
+                    {cameras.map((camera) => {
+                        const canStartRecording = can(camera.workspace_id, 'recordings.start');
+
+                        return (
                         <Card key={camera.id} className="overflow-hidden">
                             <CameraPlayer hlsUrl={camera.hls_url} isLive={camera.is_live} name={camera.name} />
                             <div className="flex items-center justify-between p-3">
@@ -205,40 +211,43 @@ export default function Cameras() {
                                     />
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2 border-t border-layer-line px-3 py-2">
-                                {camera.active_recording_ends_at ? (
-                                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground-1">
-                                        <Circle className="size-2 fill-destructive text-destructive" />
-                                        Recording — ends {new Date(camera.active_recording_ends_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                ) : (
-                                    <>
-                                        <select
-                                            value={recordingDurations[camera.id] ?? RECORDING_DURATION_OPTIONS[0]}
-                                            onChange={(e) =>
-                                                setRecordingDurations((current) => ({ ...current, [camera.id]: Number(e.target.value) }))
-                                            }
-                                            className="rounded-lg border-layer-line bg-layer py-1 pl-2 pr-8 text-xs text-foreground focus:border-primary-focus focus:ring-primary-focus"
-                                        >
-                                            {RECORDING_DURATION_OPTIONS.map((minutes) => (
-                                                <option key={minutes} value={minutes}>
-                                                    {formatDurationMinutes(minutes)}
-                                                </option>
-                                            ))}
-                                        </select>
-                                        <Button
-                                            variant="secondary"
-                                            className="px-2 py-1 text-xs"
-                                            disabled={startingRecordingId === camera.id}
-                                            onClick={() => startRecording(camera)}
-                                        >
-                                            {startingRecordingId === camera.id ? 'Starting…' : 'Record'}
-                                        </Button>
-                                    </>
-                                )}
-                            </div>
+                            {(camera.active_recording_ends_at || canStartRecording) && (
+                                <div className="flex items-center gap-2 border-t border-layer-line px-3 py-2">
+                                    {camera.active_recording_ends_at ? (
+                                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground-1">
+                                            <Circle className="size-2 fill-destructive text-destructive" />
+                                            Recording — ends {new Date(camera.active_recording_ends_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    ) : (
+                                        <>
+                                            <select
+                                                value={recordingDurations[camera.id] ?? RECORDING_DURATION_OPTIONS[0]}
+                                                onChange={(e) =>
+                                                    setRecordingDurations((current) => ({ ...current, [camera.id]: Number(e.target.value) }))
+                                                }
+                                                className="rounded-lg border-layer-line bg-layer py-1 pl-2 pr-8 text-xs text-foreground focus:border-primary-focus focus:ring-primary-focus"
+                                            >
+                                                {RECORDING_DURATION_OPTIONS.map((minutes) => (
+                                                    <option key={minutes} value={minutes}>
+                                                        {formatDurationMinutes(minutes)}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <Button
+                                                variant="secondary"
+                                                className="px-2 py-1 text-xs"
+                                                disabled={startingRecordingId === camera.id}
+                                                onClick={() => startRecording(camera)}
+                                            >
+                                                {startingRecordingId === camera.id ? 'Starting…' : 'Record'}
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
+                            )}
                         </Card>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 

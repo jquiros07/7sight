@@ -2,7 +2,22 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { ApexOptions } from 'apexcharts';
 import { AppLayout } from '@/components/AppLayout';
-import { Camera, CheckCircle2, ChevronLeft, Circle, Clock, Database, Loader2, ShieldAlert, ShieldQuestion, Sparkles, Video, XCircle } from 'lucide-react';
+import {
+    Camera,
+    CheckCircle2,
+    ChevronLeft,
+    Circle,
+    Clock,
+    Database,
+    Download,
+    Flag,
+    Loader2,
+    ShieldAlert,
+    ShieldQuestion,
+    Sparkles,
+    Video,
+    XCircle,
+} from 'lucide-react';
 import { cssVarToValue } from 'preline/helpers/apexcharts';
 import { api } from '../lib/api';
 import { getErrorMessages } from '../lib/errors';
@@ -17,6 +32,24 @@ type WorkspaceInsightSummary = {
     generated_at: string;
 };
 
+type AnalysisJobType = 'object_detection' | 'threat_detection' | 'content_moderation' | 'text_detection';
+
+const JOB_TYPE_LABELS: Record<AnalysisJobType, string> = {
+    object_detection: 'Object detection',
+    threat_detection: 'Threat detection',
+    content_moderation: 'Content moderation',
+    text_detection: 'Text detection',
+};
+
+type NeedsReviewItem = {
+    video_id: number;
+    video_title: string;
+    type: AnalysisJobType;
+    note: string | null;
+    flagged_by: string | null;
+    flagged_at: string;
+};
+
 type WorkspaceDashboardData = {
     workspace: { id: number; name: string };
     insight_summary: WorkspaceInsightSummary | null;
@@ -26,6 +59,7 @@ type WorkspaceDashboardData = {
         completed_analyses: number;
         processing_now: number;
         failed_jobs: number;
+        flagged_for_review: number;
         avg_processing_seconds: number | null;
         total_cameras: number;
         total_recordings: number;
@@ -40,6 +74,7 @@ type WorkspaceDashboardData = {
     risk_level_breakdown: { LOW: number; MEDIUM: number; HIGH: number; CRITICAL: number };
     moderation_severity_breakdown: { NONE: number; LOW: number; MEDIUM: number; HIGH: number };
     recordings_by_status: { recording: number; completed: number; failed: number; cancelled: number };
+    needs_review: NeedsReviewItem[];
 };
 
 function formatFileSize(bytes: number): string {
@@ -80,6 +115,24 @@ function StatCard({ icon, label, value, caption, tone = 'default' }: { icon: Rea
                 {caption && <p className="text-xs text-muted-foreground-2">{caption}</p>}
             </div>
         </Card>
+    );
+}
+
+function NeedsReviewRow({ item, onClick }: { item: NeedsReviewItem; onClick: () => void }) {
+    return (
+        <button onClick={onClick} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-layer">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                <Flag className="size-4" strokeWidth={1.75} />
+            </div>
+            <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">{item.video_title}</p>
+                <p className="truncate text-xs text-muted-foreground-1">
+                    {JOB_TYPE_LABELS[item.type] ?? item.type}
+                    {item.flagged_by && ` · flagged by ${item.flagged_by}`}
+                    {item.note && ` · "${item.note}"`}
+                </p>
+            </div>
+        </button>
     );
 }
 
@@ -280,8 +333,19 @@ export default function WorkspaceDashboard() {
 
             {!loading && dashboard && (
                 <>
-                    <h1 className="mt-4 font-heading text-2xl font-medium">{dashboard.workspace.name}</h1>
-                    <p className="mt-1 text-sm text-muted-foreground-1">Dashboard</p>
+                    <div className="mt-4 flex items-start justify-between gap-4">
+                        <div>
+                            <h1 className="font-heading text-2xl font-medium">{dashboard.workspace.name}</h1>
+                            <p className="mt-1 text-sm text-muted-foreground-1">Dashboard</p>
+                        </div>
+                        <Button
+                            variant="secondary"
+                            onClick={() => window.open(`/api/workspaces/${dashboard.workspace.id}/dashboard/report`, '_blank')}
+                        >
+                            <Download className="size-4" strokeWidth={1.75} />
+                            Download PDF
+                        </Button>
+                    </div>
 
                     <div className="mt-6">
                         <WorkspaceSummaryCard workspaceId={dashboard.workspace.id} initialSummary={dashboard.insight_summary} />
@@ -307,7 +371,7 @@ export default function WorkspaceDashboard() {
                         />
                     </div>
 
-                    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
                         <StatCard
                             icon={<ShieldAlert className="size-5" strokeWidth={1.75} />}
                             label="Threats detected"
@@ -322,7 +386,37 @@ export default function WorkspaceDashboard() {
                             caption="from generated AI insights"
                             tone={dashboard.insight_flags.flagged_moderation > 0 ? 'warning' : 'default'}
                         />
+                        <StatCard
+                            icon={<Flag className="size-5" strokeWidth={1.75} />}
+                            label="Needs review"
+                            value={dashboard.stats.flagged_for_review}
+                            caption="flagged by your team"
+                            tone={dashboard.stats.flagged_for_review > 0 ? 'warning' : 'default'}
+                        />
                     </div>
+
+                    <Card className="mt-4">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Flag className="size-5 text-amber-600 dark:text-amber-400" strokeWidth={1.75} />
+                                Needs review
+                            </CardTitle>
+                            <CardDescription>Analysis results your team flagged as inaccurate</CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex flex-col gap-1 pt-0">
+                            {dashboard.needs_review.length === 0 ? (
+                                <p className="py-8 text-center text-sm text-muted-foreground-1">No flagged results right now.</p>
+                            ) : (
+                                dashboard.needs_review.map((item, index) => (
+                                    <NeedsReviewRow
+                                        key={`${item.video_id}-${item.type}-${index}`}
+                                        item={item}
+                                        onClick={() => navigate(`/videos/${item.video_id}/results`)}
+                                    />
+                                ))
+                            )}
+                        </CardContent>
+                    </Card>
 
                     <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
                         <StatCard

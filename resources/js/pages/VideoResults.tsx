@@ -2,10 +2,11 @@ import { FormEvent, memo, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { ApexOptions } from 'apexcharts';
 import { AppLayout } from '@/components/AppLayout';
-import { BarChart3, ChevronLeft, Download, HelpCircle, Lightbulb, Loader2, PlayCircle, Sparkles } from 'lucide-react';
+import { BarChart3, ChevronLeft, Download, Flag, FlagOff, HelpCircle, Lightbulb, Loader2, PlayCircle, Sparkles } from 'lucide-react';
 import { buildTooltip, type IBuildTooltipHelperOptions, type IChartProps } from 'preline/helpers/apexcharts';
 import { varToColor } from 'preline/helpers/shared';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { cn } from '../lib/utils';
 import { getErrorMessages } from '../lib/errors';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -35,10 +36,14 @@ type AnalysisJob = {
     error_message: string | null;
     created_at: string;
     results: AnalysisResult[];
+    flagged_for_review_at: string | null;
+    flagged_review_note: string | null;
+    flagged_by_user: { id: number; name: string } | null;
 };
 
 type VideoDetail = {
     id: number;
+    workspace_id: number;
     title: string;
     description: string | null;
     status: string;
@@ -532,12 +537,14 @@ function InsightsCard({
     videoId,
     insights,
     failedAt,
+    canRetry,
     onSeek,
     onRetried,
 }: {
     videoId: number;
     insights: VideoInsightsResponse | null;
     failedAt: string | null;
+    canRetry: boolean;
     onSeek: (seconds: number) => void;
     onRetried: (insights: VideoInsightsResponse) => void;
 }) {
@@ -575,16 +582,18 @@ function InsightsCard({
                         <AlertDescription>
                             <div className="flex flex-wrap items-center justify-between gap-3">
                                 <span>AI insight generation failed for this video.</span>
-                                <Button variant="secondary" disabled={retrying} onClick={handleRetry}>
-                                    {retrying ? (
-                                        <>
-                                            <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
-                                            Retrying…
-                                        </>
-                                    ) : (
-                                        'Retry'
-                                    )}
-                                </Button>
+                                {canRetry && (
+                                    <Button variant="secondary" disabled={retrying} onClick={handleRetry}>
+                                        {retrying ? (
+                                            <>
+                                                <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
+                                                Retrying…
+                                            </>
+                                        ) : (
+                                            'Retry'
+                                        )}
+                                    </Button>
+                                )}
                             </div>
                         </AlertDescription>
                     </Alert>
@@ -724,10 +733,12 @@ const InquiryAnswer = memo(function InquiryAnswer({ inquiry, onSeek }: { inquiry
 function InquireCard({
     videoId,
     availableTypes,
+    canInquire,
     onSeek,
 }: {
     videoId: number;
     availableTypes: AnalysisJobType[];
+    canInquire: boolean;
     onSeek: (seconds: number) => void;
 }) {
     const [question, setQuestion] = useState('');
@@ -791,7 +802,11 @@ function InquireCard({
             <CardContent className="flex flex-col gap-4">
                 <p className="text-sm text-muted-foreground-1">Ask a specific question about this video's detections.</p>
 
-                {!loadingHistory && history.length === 0 && (
+                {!canInquire && (
+                    <p className="text-sm text-muted-foreground-1">Ask a workspace admin for access to ask new questions.</p>
+                )}
+
+                {canInquire && !loadingHistory && history.length === 0 && (
                     <div className="flex flex-wrap gap-2">
                         {suggestions.map((suggestion) => (
                             <button
@@ -806,28 +821,30 @@ function InquireCard({
                     </div>
                 )}
 
-                <form onSubmit={handleAsk} className="flex gap-2">
-                    <Input
-                        value={question}
-                        onChange={(e) => setQuestion(e.target.value)}
-                        placeholder="e.g. Was a weapon visible near the entrance?"
-                        disabled={asking}
-                        aria-label="Ask a question about this video"
-                    />
-                    <Button type="submit" disabled={asking || !question.trim()}>
-                        {asking ? (
-                            <>
-                                <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
-                                Thinking…
-                            </>
-                        ) : (
-                            <>
-                                <Sparkles className="size-4" strokeWidth={1.75} />
-                                Ask
-                            </>
-                        )}
-                    </Button>
-                </form>
+                {canInquire && (
+                    <form onSubmit={handleAsk} className="flex gap-2">
+                        <Input
+                            value={question}
+                            onChange={(e) => setQuestion(e.target.value)}
+                            placeholder="e.g. Was a weapon visible near the entrance?"
+                            disabled={asking}
+                            aria-label="Ask a question about this video"
+                        />
+                        <Button type="submit" disabled={asking || !question.trim()}>
+                            {asking ? (
+                                <>
+                                    <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />
+                                    Thinking…
+                                </>
+                            ) : (
+                                <>
+                                    <Sparkles className="size-4" strokeWidth={1.75} />
+                                    Ask
+                                </>
+                            )}
+                        </Button>
+                    </form>
+                )}
 
                 {error.length > 0 && (
                     <Alert variant="destructive" onDismiss={() => setError([])}>
@@ -878,14 +895,122 @@ function InquireCard({
     );
 }
 
-function AnalysisJobCard({ job, onSeek }: { job: AnalysisJob; onSeek: (seconds: number) => void }) {
+function AnalysisJobCard({
+    videoId,
+    job,
+    onSeek,
+    onJobUpdated,
+}: {
+    videoId: number;
+    job: AnalysisJob;
+    onSeek: (seconds: number) => void;
+    onJobUpdated: (job: AnalysisJob) => void;
+}) {
+    const [showNoteInput, setShowNoteInput] = useState(false);
+    const [note, setNote] = useState('');
+    const [flagging, setFlagging] = useState(false);
+    const [flagError, setFlagError] = useState<string[]>([]);
+
+    async function handleFlag() {
+        setFlagging(true);
+        setFlagError([]);
+        try {
+            const res = await api.post<AnalysisJob>(`/api/videos/${videoId}/analysis-jobs/${job.id}/flag`, {
+                note: note.trim() || undefined,
+            });
+            onJobUpdated(res.data);
+            setShowNoteInput(false);
+            setNote('');
+        } catch (err) {
+            setFlagError(getErrorMessages(err));
+        } finally {
+            setFlagging(false);
+        }
+    }
+
+    async function handleUnflag() {
+        setFlagging(true);
+        setFlagError([]);
+        try {
+            const res = await api.delete<AnalysisJob>(`/api/videos/${videoId}/analysis-jobs/${job.id}/flag`);
+            onJobUpdated(res.data);
+        } catch (err) {
+            setFlagError(getErrorMessages(err));
+        } finally {
+            setFlagging(false);
+        }
+    }
+
     return (
         <Card>
             <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
                 <CardTitle className="text-base">{TYPE_LABELS[job.type] ?? job.type}</CardTitle>
-                <JobStatusBadge status={job.status} />
+                <div className="flex items-center gap-2">
+                    <JobStatusBadge status={job.status} />
+                    {job.status === 'completed' && (
+                        <Button
+                            variant="secondary"
+                            className="px-2 py-1 text-xs"
+                            disabled={flagging}
+                            onClick={job.flagged_for_review_at ? handleUnflag : () => setShowNoteInput((v) => !v)}
+                        >
+                            {job.flagged_for_review_at ? (
+                                <>
+                                    <FlagOff className="size-3.5" strokeWidth={1.75} />
+                                    {flagging ? 'Unflagging…' : 'Unflag'}
+                                </>
+                            ) : (
+                                <>
+                                    <Flag className="size-3.5" strokeWidth={1.75} />
+                                    Flag for review
+                                </>
+                            )}
+                        </Button>
+                    )}
+                </div>
             </CardHeader>
             <CardContent>
+                {job.flagged_for_review_at && (
+                    <Alert className="mb-4">
+                        <AlertDescription>
+                            Flagged for human review{job.flagged_by_user && ` by ${job.flagged_by_user.name}`} on{' '}
+                            {new Date(job.flagged_for_review_at).toLocaleString()}.
+                            {job.flagged_review_note && <p className="mt-1 italic">"{job.flagged_review_note}"</p>}
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {showNoteInput && !job.flagged_for_review_at && (
+                    <div className="mb-4 flex flex-col gap-2 rounded-lg border border-layer-line p-3">
+                        <Input
+                            value={note}
+                            onChange={(e) => setNote(e.target.value)}
+                            placeholder="What looks wrong? (optional)"
+                            aria-label={`Note for flagging ${TYPE_LABELS[job.type] ?? job.type}`}
+                        />
+                        <div className="flex gap-2">
+                            <Button disabled={flagging} onClick={handleFlag}>
+                                {flagging ? 'Flagging…' : 'Submit flag'}
+                            </Button>
+                            <Button variant="secondary" onClick={() => setShowNoteInput(false)}>
+                                Cancel
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {flagError.length > 0 && (
+                    <Alert variant="destructive" className="mb-4" onDismiss={() => setFlagError([])}>
+                        <AlertDescription>
+                            <ul className="list-disc space-y-1 pl-4">
+                                {flagError.map((message) => (
+                                    <li key={message}>{message}</li>
+                                ))}
+                            </ul>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
                 {job.status === 'failed' && (
                     <Alert variant="destructive">
                         <AlertDescription>{job.error_message ?? 'Analysis failed.'}</AlertDescription>
@@ -949,6 +1074,7 @@ function AnalysisJobCard({ job, onSeek }: { job: AnalysisJob; onSeek: (seconds: 
 export default function VideoResults() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const { can } = useAuth();
 
     const [video, setVideo] = useState<VideoDetail | null>(null);
     const [loading, setLoading] = useState(true);
@@ -962,6 +1088,14 @@ export default function VideoResults() {
         if (!el) return;
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         el.currentTime = seconds;
+    }
+
+    function handleJobUpdated(updatedJob: AnalysisJob) {
+        setVideo((current) =>
+            current
+                ? { ...current, analysis_jobs: current.analysis_jobs.map((job) => (job.id === updatedJob.id ? updatedJob : job)) }
+                : current,
+        );
     }
 
     useEffect(() => {
@@ -1086,12 +1220,14 @@ export default function VideoResults() {
                                     videoId={video.id}
                                     insights={insights}
                                     failedAt={video.insights_failed_at}
+                                    canRetry={can(video.workspace_id, 'videos.generate-insights')}
                                     onSeek={seekTo}
                                     onRetried={setInsights}
                                 />
                                 <InquireCard
                                     videoId={video.id}
                                     availableTypes={latestJobsByType.filter((job) => job.status === 'completed').map((job) => job.type)}
+                                    canInquire={can(video.workspace_id, 'videos.inquire')}
                                     onSeek={seekTo}
                                 />
                             </div>
@@ -1111,7 +1247,7 @@ export default function VideoResults() {
                                 <p className="text-sm text-muted-foreground-1">This video has no analysis jobs yet.</p>
                             )}
                             {latestJobsByType.map((job) => (
-                                <AnalysisJobCard key={job.id} job={job} onSeek={seekTo} />
+                                <AnalysisJobCard key={job.id} videoId={video.id} job={job} onSeek={seekTo} onJobUpdated={handleJobUpdated} />
                             ))}
                         </div>
                     </div>

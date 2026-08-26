@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Video\AnalyzeVideo;
 use App\Actions\Video\DeleteVideo;
+use App\Actions\Video\FlagAnalysisJobForReview;
 use App\Actions\Video\GenerateVideoInsights;
 use App\Actions\Video\GenerateVideoReport;
 use App\Actions\Video\InquireAboutVideo;
@@ -11,10 +12,12 @@ use App\Actions\Video\ListVideoInquiries;
 use App\Actions\Video\ListVideos;
 use App\Actions\Video\ShowVideo;
 use App\Actions\Video\StreamVideo;
+use App\Actions\Video\UnflagAnalysisJobForReview;
 use App\Actions\Video\UpdateVideo;
 use App\Actions\Video\UploadVideo;
 use App\Enums\AnalysisType;
 use App\Jobs\GenerateVideoInsightsJob;
+use App\Models\AnalysisJob;
 use App\Models\Video;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -192,6 +195,38 @@ class VideoController extends Controller
             ]), 201);
         } catch (ValidationException $e) {
             return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], $e->status);
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function flagAnalysisJob(Request $request, Video $video, AnalysisJob $analysisJob, FlagAnalysisJobForReview $flagAnalysisJobForReview)
+    {
+        try {
+            $validated = $request->validate([
+                'note' => ['nullable', 'string', 'max:2000'],
+            ]);
+
+            return response()->json($flagAnalysisJobForReview($request->user(), $video, $analysisJob, $validated['note'] ?? null));
+        } catch (ValidationException $e) {
+            return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], $e->status);
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function unflagAnalysisJob(Request $request, Video $video, AnalysisJob $analysisJob, UnflagAnalysisJobForReview $unflagAnalysisJobForReview)
+    {
+        try {
+            return response()->json($unflagAnalysisJobForReview($request->user(), $video, $analysisJob));
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
         } catch (Throwable $e) {

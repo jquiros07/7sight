@@ -37,6 +37,7 @@ trait PresentsCameraStatus
             'name' => $camera->name,
             'location' => $camera->location,
             'stream_url' => $camera->stream_url,
+            'workspace_id' => $camera->workspace_id,
             'workspace' => $camera->workspace?->name,
             'created_by' => $camera->creator?->name,
             'created_at' => $camera->created_at,

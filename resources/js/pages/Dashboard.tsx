@@ -9,6 +9,8 @@ import {
     Circle,
     Clock,
     Database,
+    Download,
+    Flag,
     Folder,
     Lightbulb,
     Loader2,
@@ -31,6 +33,25 @@ import { ApexChart } from '@/components/ui/chart';
 import { Progress } from '@/components/ui/progress';
 
 type VideoStatus = 'uploaded' | 'processing' | 'ready' | 'failed';
+
+type AnalysisJobType = 'object_detection' | 'threat_detection' | 'content_moderation' | 'text_detection';
+
+const JOB_TYPE_LABELS: Record<AnalysisJobType, string> = {
+    object_detection: 'Object detection',
+    threat_detection: 'Threat detection',
+    content_moderation: 'Content moderation',
+    text_detection: 'Text detection',
+};
+
+type NeedsReviewItem = {
+    video_id: number;
+    video_title: string;
+    workspace_name: string;
+    type: AnalysisJobType;
+    note: string | null;
+    flagged_by: string | null;
+    flagged_at: string;
+};
 
 type SpotlightItem = {
     video_id: number;
@@ -69,6 +90,7 @@ type DashboardData = {
         total_inquiries: number;
         total_cameras: number;
         active_recordings: number;
+        flagged_for_review: number;
     };
     uploads_over_time: { date: string; count: number }[];
     safety_spotlight: {
@@ -79,6 +101,7 @@ type DashboardData = {
     workspace_leaderboard: LeaderboardWorkspace[];
     recent_activity: ActivityVideo[];
     top_labels: { label: string; occurrences: number }[];
+    needs_review: NeedsReviewItem[];
 };
 
 type SuggestionTone = 'warning' | 'success' | 'info';
@@ -150,6 +173,15 @@ function computeSuggestions(dashboard: DashboardData): Suggestion[] {
         });
     }
 
+    if (dashboard.stats.flagged_for_review > 0) {
+        const n = dashboard.stats.flagged_for_review;
+        suggestions.push({
+            icon: <Flag className="size-4" strokeWidth={1.75} />,
+            tone: 'warning',
+            text: `${n} analysis result${n === 1 ? '' : 's'} flagged for human review — see Needs review.`,
+        });
+    }
+
     if (dashboard.stats.processing_videos > 0) {
         const n = dashboard.stats.processing_videos;
         suggestions.push({
@@ -205,7 +237,7 @@ function formatChartDate(dateStr: string): string {
 
 function StatCell({ icon, label, value, tone = 'default' }: { icon: ReactNode; label: string; value: string; tone?: 'default' | 'warning' }) {
     return (
-        <div className="flex flex-1 items-center gap-3 px-5 py-4">
+        <div className="flex items-center gap-3 bg-card px-5 py-4">
             <div
                 className={cn(
                     'flex size-10 shrink-0 items-center justify-center rounded-lg',
@@ -239,6 +271,23 @@ function SpotlightRow({ item, onClick }: { item: SpotlightItem; onClick: () => v
             <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', SEVERITY_STYLES[item.severity] ?? SEVERITY_STYLES.LOW)}>
                 {item.severity}
             </span>
+        </button>
+    );
+}
+
+function NeedsReviewRow({ item, onClick }: { item: NeedsReviewItem; onClick: () => void }) {
+    return (
+        <button onClick={onClick} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-layer">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                <Flag className="size-4" strokeWidth={1.75} />
+            </div>
+            <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">{item.video_title}</p>
+                <p className="truncate text-xs text-muted-foreground-1">
+                    {item.workspace_name} · {JOB_TYPE_LABELS[item.type] ?? item.type}
+                    {item.flagged_by && ` · flagged by ${item.flagged_by}`}
+                </p>
+            </div>
         </button>
     );
 }
@@ -345,8 +394,20 @@ export default function Dashboard() {
                 </div>
             )}
 
-            <h1 className="font-heading text-2xl font-medium">Dashboard</h1>
-            <p className="mt-1 text-sm text-muted-foreground-1">Welcome, {user?.name}. Here's what's happening across your workspaces.</p>
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <h1 className="font-heading text-2xl font-medium">Dashboard</h1>
+                    <p className="mt-1 text-sm text-muted-foreground-1">
+                        Welcome, {user?.name}. Here's what's happening across your workspaces.
+                    </p>
+                </div>
+                {dashboard && dashboard.stats.total_workspaces > 0 && (
+                    <Button variant="secondary" onClick={() => window.open('/api/dashboard/report', '_blank')}>
+                        <Download className="size-4" strokeWidth={1.75} />
+                        Download PDF
+                    </Button>
+                )}
+            </div>
 
             {loadError.length > 0 && (
                 <Alert variant="destructive" className="mt-4" onDismiss={() => setLoadError([])}>
@@ -377,8 +438,14 @@ export default function Dashboard() {
 
             {!loading && dashboard && dashboard.stats.total_workspaces > 0 && (
                 <>
-                    {/* Compact stat strip, in one card instead of separate cards per stat */}
-                    <Card className="mt-6 flex-row flex-wrap divide-x divide-card-line overflow-hidden">
+                    {/* Compact stat grid, in one card instead of separate cards per stat. Uses the
+                        gap-as-divider trick (bg-card-line container + gap-px + bg-card cells) instead
+                        of divide-x/divide-y, since those only border the first-in-DOM child and would
+                        wrongly draw a left border on the first cell of every wrapped row. Column count
+                        is fixed at 3 (9 stats / 3 = exactly 3 even rows) rather than a wider breakpoint
+                        like 5, which would leave a dangling empty cell with nothing to paint over the
+                        divider background on the last row. */}
+                    <Card className="mt-6 grid grid-cols-1 gap-px overflow-hidden bg-card-line sm:grid-cols-3">
                         <StatCell icon={<Folder className="size-5" strokeWidth={1.75} />} label="Workspaces" value={String(dashboard.stats.total_workspaces)} />
                         <StatCell icon={<Video className="size-5" strokeWidth={1.75} />} label="Total videos" value={String(dashboard.stats.total_videos)} />
                         <StatCell icon={<Database className="size-5" strokeWidth={1.75} />} label="Storage used" value={formatFileSize(dashboard.stats.total_storage_bytes)} />
@@ -404,10 +471,16 @@ export default function Dashboard() {
                             label="Recording now"
                             value={String(dashboard.stats.active_recordings)}
                         />
+                        <StatCell
+                            icon={<Flag className="size-5" strokeWidth={1.75} />}
+                            label="Needs review"
+                            value={String(dashboard.stats.flagged_for_review)}
+                            tone={dashboard.stats.flagged_for_review > 0 ? 'warning' : 'default'}
+                        />
                     </Card>
 
-                    {/* Suggestions + safety spotlight, side by side */}
-                    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    {/* Suggestions + safety spotlight + needs review, side by side */}
+                    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
                         <Card>
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
@@ -447,6 +520,36 @@ export default function Dashboard() {
                                     dashboard.safety_spotlight.items.map((item) => (
                                         <SpotlightRow
                                             key={`${item.type}-${item.video_id}`}
+                                            item={item}
+                                            onClick={() => navigate(`/videos/${item.video_id}/results`)}
+                                        />
+                                    ))
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Flag className="size-5 text-amber-600 dark:text-amber-400" strokeWidth={1.75} />
+                                    Needs review
+                                </CardTitle>
+                                <CardDescription>
+                                    {dashboard.stats.flagged_for_review > 0
+                                        ? `${dashboard.stats.flagged_for_review} result${dashboard.stats.flagged_for_review === 1 ? '' : 's'} flagged by your team, across all workspaces`
+                                        : 'Analysis results your team flagged as inaccurate'}
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex flex-col gap-1 pt-0">
+                                {dashboard.needs_review.length === 0 ? (
+                                    <div className="flex flex-col items-center gap-2 py-8 text-center">
+                                        <CheckCircle2 className="size-6 text-green-600 dark:text-green-400" strokeWidth={1.75} />
+                                        <p className="text-sm text-muted-foreground-1">No flagged results right now.</p>
+                                    </div>
+                                ) : (
+                                    dashboard.needs_review.map((item, index) => (
+                                        <NeedsReviewRow
+                                            key={`${item.video_id}-${item.type}-${index}`}
                                             item={item}
                                             onClick={() => navigate(`/videos/${item.video_id}/results`)}
                                         />

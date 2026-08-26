@@ -24,7 +24,7 @@ class GenerateVideoReport
     {
         $this->authorizeMembership($user, $video->workspace);
 
-        $video->loadMissing('analysisJobs.results', 'latestInsight', 'workspace', 'inquiries');
+        $video->loadMissing('analysisJobs.results', 'analysisJobs.flaggedByUser', 'latestInsight', 'workspace', 'inquiries');
 
         return Pdf::view('pdfs.video-report', [
             'video' => $video,

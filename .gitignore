@@ -25,6 +25,7 @@
 /storage/app/public
 /storage/pail
 /vendor
+/video_intelligence_platform
 _ide_helper.php
 Homestead.json
 Homestead.yaml

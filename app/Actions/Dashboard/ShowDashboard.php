@@ -4,6 +4,7 @@ namespace App\Actions\Dashboard;
 
 use App\Enums\CameraRecordingStatus;
 use App\Enums\VideoStatus;
+use App\Models\AnalysisJob;
 use App\Models\AnalysisResult;
 use App\Models\Camera;
 use App\Models\CameraRecording;
@@ -19,6 +20,8 @@ class ShowDashboard
     private const SPOTLIGHT_LIMIT = 5;
 
     private const ACTIVITY_LIMIT = 8;
+
+    private const NEEDS_REVIEW_LIMIT = 5;
 
     private const TOP_LABELS_LIMIT = 8;
 
@@ -54,10 +57,15 @@ class ShowDashboard
             ->select(['id', 'workspace_id', 'title', 'status', 'size', 'created_at', 'updated_at'])
             ->whereIn('workspace_id', $workspaceIds)
             ->withCount('inquiries')
-            ->with(['insights:id,video_id,threat_assessment,moderation,created_at'])
+            ->with([
+                'insights:id,video_id,threat_assessment,moderation,created_at',
+                'analysisJobs:id,video_id,type,flagged_for_review_at,flagged_by,flagged_review_note',
+                'analysisJobs.flaggedByUser:id,name',
+            ])
             ->get();
 
         $signals = $this->flaggedSignals($videos, $workspaceNames);
+        $flaggedJobs = $videos->flatMap->analysisJobs->whereNotNull('flagged_for_review_at');
 
         $cameras = Camera::query()->select(['id', 'workspace_id'])->whereIn('workspace_id', $workspaceIds)->get();
         $activeRecordings = CameraRecording::query()
@@ -76,6 +84,7 @@ class ShowDashboard
                 'total_inquiries' => (int) $videos->sum('inquiries_count'),
                 'total_cameras' => $cameras->count(),
                 'active_recordings' => $activeRecordings,
+                'flagged_for_review' => $flaggedJobs->count(),
             ],
             'uploads_over_time' => $this->uploadsOverTime($videos),
             'safety_spotlight' => [
@@ -86,7 +95,39 @@ class ShowDashboard
             'workspace_leaderboard' => $this->workspaceLeaderboard($workspaces, $videos, $signals, $cameras),
             'recent_activity' => $this->recentActivity($videos, $workspaceNames),
             'top_labels' => $this->topLabels($workspaceIds),
+            'needs_review' => $this->needsReviewItems($flaggedJobs, $videos, $workspaceNames),
         ];
+    }
+
+    /**
+     * The most recently flagged analysis jobs across every workspace the
+     * user belongs to - results a human disputed as not matching what they
+     * saw in the video.
+     *
+     * @param  Collection<int, AnalysisJob>  $flaggedJobs
+     * @param  Collection<int, Video>  $videos
+     * @param  Collection<int, string>  $workspaceNames
+     * @return array<int, array<string, mixed>>
+     */
+    private function needsReviewItems(Collection $flaggedJobs, Collection $videos, Collection $workspaceNames): array
+    {
+        $videoTitles = $videos->pluck('title', 'id');
+        $videoWorkspaceIds = $videos->pluck('workspace_id', 'id');
+
+        return $flaggedJobs
+            ->sortByDesc('flagged_for_review_at')
+            ->take(self::NEEDS_REVIEW_LIMIT)
+            ->map(fn (AnalysisJob $job) => [
+                'video_id' => $job->video_id,
+                'video_title' => $videoTitles[$job->video_id] ?? '',
+                'workspace_name' => $workspaceNames[$videoWorkspaceIds[$job->video_id] ?? null] ?? '',
+                'type' => $job->type->value,
+                'note' => $job->flagged_review_note,
+                'flagged_by' => $job->flaggedByUser?->name,
+                'flagged_at' => $job->flagged_for_review_at,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

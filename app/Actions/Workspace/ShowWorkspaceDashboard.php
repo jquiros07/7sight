@@ -22,6 +22,8 @@ class ShowWorkspaceDashboard
 
     private const TOP_LABELS_LIMIT = 8;
 
+    private const NEEDS_REVIEW_LIMIT = 5;
+
     /**
      * Aggregate stats for a workspace's videos, analysis jobs, and generated
      * AI insights. Requires workspace membership.
@@ -33,10 +35,11 @@ class ShowWorkspaceDashboard
         $this->authorizeMembership($user, $workspace);
 
         $videos = $workspace->videos()
-            ->select(['id', 'workspace_id', 'status', 'size', 'created_at'])
+            ->select(['id', 'workspace_id', 'title', 'status', 'size', 'created_at'])
             ->with([
-                'analysisJobs:id,video_id,type,status,started_at,completed_at',
+                'analysisJobs:id,video_id,type,status,started_at,completed_at,flagged_for_review_at,flagged_by,flagged_review_note',
                 'analysisJobs.results:id,analysis_job_id,label,occurrences',
+                'analysisJobs.flaggedByUser:id,name',
                 'insights:id,video_id,threat_assessment,moderation,created_at',
             ])
             ->get();
@@ -65,6 +68,7 @@ class ShowWorkspaceDashboard
                 'completed_analyses' => $jobs->where('status', 'completed')->count(),
                 'processing_now' => $jobs->whereIn('status', ['pending', 'processing'])->count(),
                 'failed_jobs' => $jobs->where('status', 'failed')->count(),
+                'flagged_for_review' => $jobs->whereNotNull('flagged_for_review_at')->count(),
                 'avg_processing_seconds' => $this->avgProcessingSeconds($jobs),
                 'total_cameras' => $cameraIds->count(),
                 'total_recordings' => $recordings->count(),
@@ -93,7 +97,36 @@ class ShowWorkspaceDashboard
             'insight_flags' => $this->insightFlags($videos),
             'risk_level_breakdown' => $this->riskLevelBreakdown($videos),
             'moderation_severity_breakdown' => $this->moderationSeverityBreakdown($videos),
+            'needs_review' => $this->needsReviewItems($videos, $jobs),
         ];
+    }
+
+    /**
+     * The most recently flagged analysis jobs in this workspace - results a
+     * human disputed as not matching what they saw in the video.
+     *
+     * @param  Collection<int, Video>  $videos
+     * @param  Collection<int, AnalysisJob>  $jobs
+     * @return array<int, array<string, mixed>>
+     */
+    private function needsReviewItems(Collection $videos, Collection $jobs): array
+    {
+        $videoTitles = $videos->pluck('title', 'id');
+
+        return $jobs
+            ->whereNotNull('flagged_for_review_at')
+            ->sortByDesc('flagged_for_review_at')
+            ->take(self::NEEDS_REVIEW_LIMIT)
+            ->map(fn (AnalysisJob $job) => [
+                'video_id' => $job->video_id,
+                'video_title' => $videoTitles[$job->video_id] ?? '',
+                'type' => $job->type->value,
+                'note' => $job->flagged_review_note,
+                'flagged_by' => $job->flaggedByUser?->name,
+                'flagged_at' => $job->flagged_for_review_at,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

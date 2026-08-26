@@ -4,6 +4,7 @@ import { AppLayout } from '@/components/AppLayout';
 import { Eye, Loader2, Pencil, Plus, Search, SlidersHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import { HSOverlay } from 'preline';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { getErrorMessages } from '../lib/errors';
 import { cn } from '../lib/utils';
 import { ActionButton } from '@/components/ui/action-button';
@@ -18,6 +19,7 @@ type VideoStatus = 'uploaded' | 'processing' | 'ready' | 'failed';
 
 type Video = {
     id: number;
+    user_id: number;
     title: string;
     status: VideoStatus;
     size: number;
@@ -192,6 +194,7 @@ function SortButton({
 export default function Videos() {
     const navigate = useNavigate();
     const location = useLocation();
+    const { can, user } = useAuth();
 
     const [videos, setVideos] = useState<PaginatedVideos | null>(null);
     const [page, setPage] = useState(1);
@@ -470,6 +473,9 @@ export default function Videos() {
                             {!loading &&
                                 videos?.data.map((video) => {
                                     const analyzing = analyzingIds.includes(video.id);
+                                    const isUploader = video.user_id === user?.id;
+                                    const canEdit = isUploader || can(video.workspace.id, 'videos.update');
+                                    const canDelete = isUploader || can(video.workspace.id, 'videos.delete');
 
                                     return (
                                         <tr key={video.id}>
@@ -485,7 +491,8 @@ export default function Videos() {
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center justify-end gap-1">
-                                                    {(video.status === 'failed' || video.status === 'uploaded') && (
+                                                    {(video.status === 'failed' || video.status === 'uploaded') &&
+                                                        can(video.workspace.id, 'videos.analyze') && (
                                                         <ActionButton
                                                             icon={<Sparkles className="size-4" strokeWidth={1.75} />}
                                                             label={analyzing ? 'Queuing…' : 'Analyze'}
@@ -502,20 +509,24 @@ export default function Videos() {
                                                         onClick={() => navigate(`/videos/${video.id}/results`)}
                                                         hoverClassName="hover:text-primary"
                                                     />
-                                                    <ActionButton
-                                                        icon={<Pencil className="size-4" strokeWidth={1.75} />}
-                                                        label="Edit"
-                                                        ariaLabel={`Edit ${video.title}`}
-                                                        onClick={() => navigate(`/videos/${video.id}/edit`)}
-                                                        hoverClassName="hover:text-primary"
-                                                    />
-                                                    <ActionButton
-                                                        icon={<Trash2 className="size-4" strokeWidth={1.75} />}
-                                                        label="Delete"
-                                                        ariaLabel={`Delete ${video.title}`}
-                                                        onClick={() => openDeleteDialog(video)}
-                                                        hoverClassName="hover:text-destructive"
-                                                    />
+                                                    {canEdit && (
+                                                        <ActionButton
+                                                            icon={<Pencil className="size-4" strokeWidth={1.75} />}
+                                                            label="Edit"
+                                                            ariaLabel={`Edit ${video.title}`}
+                                                            onClick={() => navigate(`/videos/${video.id}/edit`)}
+                                                            hoverClassName="hover:text-primary"
+                                                        />
+                                                    )}
+                                                    {canDelete && (
+                                                        <ActionButton
+                                                            icon={<Trash2 className="size-4" strokeWidth={1.75} />}
+                                                            label="Delete"
+                                                            ariaLabel={`Delete ${video.title}`}
+                                                            onClick={() => openDeleteDialog(video)}
+                                                            hoverClassName="hover:text-destructive"
+                                                        />
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
