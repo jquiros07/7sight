@@ -32,7 +32,53 @@ class ShowCameraTest extends TestCase
 
         $this->assertSame($camera->id, $result['id']);
         $this->assertTrue($result['is_live']);
-        $this->assertSame("http://localhost:8888/camera-{$camera->id}/index.m3u8", $result['hls_url']);
+        $this->assertSame("http://localhost:8000/api/cameras/{$camera->id}/hls/index.m3u8", $result['hls_url']);
+    }
+
+    public function test_a_member_sees_a_masked_stream_url(): void
+    {
+        Http::fake();
+        $workspace = Workspace::factory()->create();
+        $user = User::factory()->create();
+        $this->assignWorkspaceRole($workspace, $user, 'member');
+        $camera = Camera::factory()->create([
+            'workspace_id' => $workspace->id,
+            'stream_url' => 'rtsp://user:pass@192.168.1.10:554/stream1',
+        ]);
+
+        $result = (app(ShowCamera::class))($user, $camera);
+
+        $this->assertSame('rtsp://***:***@192.168.1.10:554/stream1', $result['stream_url']);
+    }
+
+    public function test_an_admin_sees_the_real_stream_url(): void
+    {
+        Http::fake();
+        $workspace = Workspace::factory()->create();
+        $user = User::factory()->create();
+        $this->assignWorkspaceRole($workspace, $user, 'admin');
+        $camera = Camera::factory()->create([
+            'workspace_id' => $workspace->id,
+            'stream_url' => 'rtsp://user:pass@192.168.1.10:554/stream1',
+        ]);
+
+        $result = (app(ShowCamera::class))($user, $camera);
+
+        $this->assertSame('rtsp://user:pass@192.168.1.10:554/stream1', $result['stream_url']);
+    }
+
+    public function test_the_workspace_owner_sees_the_real_stream_url_without_a_role(): void
+    {
+        Http::fake();
+        $workspace = Workspace::factory()->create();
+        $camera = Camera::factory()->create([
+            'workspace_id' => $workspace->id,
+            'stream_url' => 'rtsp://user:pass@192.168.1.10:554/stream1',
+        ]);
+
+        $result = (app(ShowCamera::class))($workspace->owner, $camera);
+
+        $this->assertSame('rtsp://user:pass@192.168.1.10:554/stream1', $result['stream_url']);
     }
 
     public function test_an_outsider_cannot_view_the_camera(): void

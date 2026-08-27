@@ -6,6 +6,7 @@ use App\Actions\Camera\Concerns\AuthorizesCameraAccess;
 use App\Actions\Camera\Concerns\ResolvesCameraPathName;
 use App\Models\Camera;
 use App\Models\User;
+use App\Rules\StreamUrlHostIsSafe;
 use App\Support\MediaMtxClient;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -37,7 +38,7 @@ class UpdateCamera
         $validated = Validator::make($input, [
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'location' => ['nullable', 'string', 'max:255'],
-            'stream_url' => ['sometimes', 'required', 'string', 'regex:/^rtsp:\/\//i'],
+            'stream_url' => ['sometimes', 'required', 'string', 'regex:/^rtsp:\/\//i', new StreamUrlHostIsSafe],
         ])->validate();
 
         $streamUrlChanged = isset($validated['stream_url']) && $validated['stream_url'] !== $camera->stream_url;

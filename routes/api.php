@@ -3,6 +3,7 @@
 use App\Http\Controllers\CameraController;
 use App\Http\Controllers\CameraRecordingController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\HealthController;
 use App\Http\Controllers\ObjectDetectionCategoryController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\UserController;
@@ -16,6 +17,7 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
     Route::get('/permissions', [UserController::class, 'permissions']);
+    Route::get('/health/detailed', [HealthController::class, 'detailed']);
 
     Route::get('/dashboard', [DashboardController::class, 'show']);
     Route::get('/dashboard/report', [DashboardController::class, 'report'])->middleware('throttle:10,1');
@@ -36,6 +38,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/videos/{video}/analysis-jobs/{analysisJob}/flag', [VideoController::class, 'unflagAnalysisJob']);
     Route::get('/object-detection-categories', [ObjectDetectionCategoryController::class, 'index']);
     Route::apiResource('cameras', CameraController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
+    Route::get('/cameras/{camera}/hls/{path}', [CameraController::class, 'hls'])
+        ->where('path', '.*')
+        ->name('cameras.hls');
     Route::prefix('cameras/{camera}')->group(function () {
         Route::get('/recordings', [CameraRecordingController::class, 'index']);
         Route::post('/recordings', [CameraRecordingController::class, 'store']);

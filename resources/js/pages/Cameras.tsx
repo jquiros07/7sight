@@ -1,7 +1,7 @@
 import { Circle, Loader2, Pencil, Plus, Trash2, Video } from 'lucide-react';
 import { HSOverlay } from 'preline';
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { CameraPlayer } from '@/components/CameraPlayer';
 import { AppLayout } from '@/components/AppLayout';
 import { ActionButton } from '@/components/ui/action-button';
@@ -13,7 +13,6 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { getErrorMessages } from '../lib/errors';
 
-const MAX_CAMERAS = 5;
 const RECORDING_DURATION_OPTIONS = [3, 5, 15, 30, 60, 180, 300, 480];
 
 function formatDurationMinutes(minutes: number): string {
@@ -36,6 +35,7 @@ type Camera = {
 export default function Cameras() {
     const navigate = useNavigate();
     const location = useLocation();
+    const [searchParams] = useSearchParams();
     const { can } = useAuth();
     const [cameras, setCameras] = useState<Camera[]>([]);
     const [loading, setLoading] = useState(true);
@@ -43,6 +43,11 @@ export default function Cameras() {
     const [statusMessage, setStatusMessage] = useState<string | null>(
         (location.state as { message?: string } | null)?.message ?? null,
     );
+    const [workspaceFilterName] = useState<string | null>(
+        (location.state as { workspaceName?: string } | null)?.workspaceName ?? null,
+    );
+
+    const workspaceIdFilter = searchParams.get('workspace_id');
 
     const [deleteTarget, setDeleteTarget] = useState<Camera | null>(null);
     const [deleting, setDeleting] = useState(false);
@@ -64,7 +69,7 @@ export default function Cameras() {
     // camera tile - only the initial mount shows it.
     function load(silent = false) {
         if (!silent) setLoading(true);
-        api.get<{ data: Camera[] }>('/api/cameras')
+        api.get<{ data: Camera[] }>('/api/cameras', { params: { workspace_id: workspaceIdFilter || undefined } })
             .then((res) => {
                 setCameras(res.data.data);
                 setListError([]);
@@ -130,15 +135,23 @@ export default function Cameras() {
     return (
         <AppLayout active="cameras">
             <div className="flex items-center justify-between">
-                <h1 className="font-heading text-2xl font-medium">Cameras</h1>
-                <Button onClick={() => navigate('/cameras/create')} disabled={cameras.length >= MAX_CAMERAS}>
+                <h1 className="font-heading text-2xl font-medium">
+                    {workspaceIdFilter ? `Cameras${workspaceFilterName ? ` — ${workspaceFilterName}` : ''}` : 'Cameras'}
+                </h1>
+                <Button onClick={() => navigate('/cameras/create')}>
                     New
                     <Plus className="size-4" strokeWidth={1.75} />
                 </Button>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground-1">
-                {cameras.length} of {MAX_CAMERAS} cameras registered.
-            </p>
+
+            {workspaceIdFilter && (
+                <p className="mt-1 text-sm text-muted-foreground-1">
+                    Showing cameras in this workspace only.{' '}
+                    <button type="button" onClick={() => navigate('/cameras')} className="text-primary hover:underline">
+                        View all cameras
+                    </button>
+                </p>
+            )}
 
             {statusMessage && listError.length === 0 && (
                 <Alert variant="success" className="mt-4" onDismiss={() => setStatusMessage(null)}>

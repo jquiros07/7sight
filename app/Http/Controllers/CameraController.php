@@ -6,6 +6,7 @@ use App\Actions\Camera\CreateCamera;
 use App\Actions\Camera\DeleteCamera;
 use App\Actions\Camera\ListCameras;
 use App\Actions\Camera\ShowCamera;
+use App\Actions\Camera\StreamCameraHls;
 use App\Actions\Camera\UpdateCamera;
 use App\Models\Camera;
 use Illuminate\Http\Request;
@@ -18,7 +19,7 @@ class CameraController extends Controller
     public function index(Request $request, ListCameras $listCameras)
     {
         try {
-            return response()->json(['data' => $listCameras($request->user())]);
+            return response()->json(['data' => $listCameras($request->user(), $request->integer('workspace_id') ?: null)]);
         } catch (Throwable $e) {
             report($e);
 
@@ -67,6 +68,27 @@ class CameraController extends Controller
             ])));
         } catch (ValidationException $e) {
             return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], $e->status);
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function hls(Request $request, Camera $camera, string $path, StreamCameraHls $streamCameraHls)
+    {
+        try {
+            // The {path} route parameter only ever captures the URL path -
+            // MediaMTX's own session id for sub-playlist/segment requests
+            // travels as a query string (e.g. ?session=...), which must be
+            // forwarded too or MediaMTX rejects the request outright.
+            if ($queryString = $request->getQueryString()) {
+                $path .= "?{$queryString}";
+            }
+
+            return $streamCameraHls($request->user(), $camera, $path);
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
         } catch (Throwable $e) {

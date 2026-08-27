@@ -8,6 +8,13 @@ apiAddress: :9997
 hls: yes
 hlsAddress: :8888
 hlsAllowOrigins: ['*']
+# Standard HLS (short-polled .ts segments) instead of the default
+# lowLatency/fMP4 variant, whose playlist requests block for a few seconds
+# waiting for the next part. Now that playback is proxied through the app
+# (routes/api.php's cameras.hls route), a blocking request would tie up a
+# PHP-FPM worker for its whole wait - not worth it for a live camera
+# dashboard rather than a latency-sensitive broadcast.
+hlsVariant: mpegts
 
 # MediaMTX's default config only grants the "api" action to callers from
 # 127.0.0.1/::1 - the app container calls it over the internal docker
@@ -31,3 +38,11 @@ authInternalUsers:
       - action: pprof
 
 paths:
+  # Local dev-only test sources: a host webcam publishes here directly via
+  # ffmpeg (see docker-compose.yml's 8554 port comment), then gets registered
+  # as a Camera whose stream_url points MediaMTX right back at itself
+  # (rtsp://mediamtx:8554/webcam-*) - same "MediaMTX pulls an RTSP source"
+  # flow as a real IP camera, just with a locally-published source instead of
+  # a real one. MediaMTX rejects publishing to any path not listed here.
+  webcam-integrated:
+  webcam-usb:

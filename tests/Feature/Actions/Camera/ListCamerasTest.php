@@ -36,7 +36,7 @@ class ListCamerasTest extends TestCase
         $this->assertTrue($byId[$live->id]['is_live']);
         $this->assertFalse($byId[$offline->id]['is_live']);
         $this->assertSame(
-            "http://localhost:8888/camera-{$live->id}/index.m3u8",
+            "http://localhost:8000/api/cameras/{$live->id}/hls/index.m3u8",
             $byId[$live->id]['hls_url']
         );
     }
@@ -69,6 +69,37 @@ class ListCamerasTest extends TestCase
         $result = (app(ListCameras::class))($user);
 
         $this->assertSame([$own->id], array_column($result, 'id'));
+    }
+
+    public function test_it_can_be_filtered_to_a_single_workspace(): void
+    {
+        Http::fake();
+        $workspaceA = Workspace::factory()->create();
+        $workspaceB = Workspace::factory()->create();
+        $user = User::factory()->create();
+        $this->assignWorkspaceRole($workspaceA, $user, 'member');
+        $this->assignWorkspaceRole($workspaceB, $user, 'member');
+
+        $inA = Camera::factory()->create(['workspace_id' => $workspaceA->id]);
+        Camera::factory()->create(['workspace_id' => $workspaceB->id]);
+
+        $result = (app(ListCameras::class))($user, $workspaceA->id);
+
+        $this->assertSame([$inA->id], array_column($result, 'id'));
+    }
+
+    public function test_filtering_to_a_workspace_the_user_does_not_belong_to_returns_nothing(): void
+    {
+        Http::fake();
+        $ownWorkspace = Workspace::factory()->create();
+        $otherWorkspace = Workspace::factory()->create();
+        $user = User::factory()->create();
+        $this->assignWorkspaceRole($ownWorkspace, $user, 'member');
+        Camera::factory()->create(['workspace_id' => $otherWorkspace->id]);
+
+        $result = (app(ListCameras::class))($user, $otherWorkspace->id);
+
+        $this->assertSame([], $result);
     }
 
     public function test_it_defaults_to_offline_when_mediamtx_is_unreachable(): void

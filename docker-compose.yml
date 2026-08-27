@@ -20,7 +20,7 @@ x-app: &app
     XDEBUG_MODE: ${XDEBUG_MODE:-debug,develop}
     INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-}
     MEDIAMTX_API_URL: http://mediamtx:9997
-    MEDIAMTX_PUBLIC_HLS_URL: ${MEDIAMTX_PUBLIC_HLS_URL:-http://localhost:8888}
+    MEDIAMTX_INTERNAL_HLS_URL: ${MEDIAMTX_INTERNAL_HLS_URL:-http://mediamtx:8888}
   depends_on:
     mysql:
       condition: service_healthy

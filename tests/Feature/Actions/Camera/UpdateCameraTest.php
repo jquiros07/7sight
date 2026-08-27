@@ -78,6 +78,16 @@ class UpdateCameraTest extends TestCase
         (app(UpdateCamera::class))($user, $camera, ['stream_url' => 'https://example.com']);
     }
 
+    public function test_it_rejects_a_stream_url_pointing_to_an_internal_host(): void
+    {
+        $camera = Camera::factory()->create();
+        $user = $this->memberOf($camera);
+
+        $this->expectException(ValidationException::class);
+
+        (app(UpdateCamera::class))($user, $camera, ['stream_url' => 'rtsp://127.0.0.1:554/stream1']);
+    }
+
     public function test_it_rolls_back_when_mediamtx_update_fails(): void
     {
         Http::fake(['*' => Http::response(status: 500)]);

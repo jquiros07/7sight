@@ -7,6 +7,7 @@ use App\Actions\Camera\Concerns\ResolvesCameraPathName;
 use App\Models\Camera;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Rules\StreamUrlHostIsSafe;
 use App\Support\MediaMtxClient;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -40,13 +41,17 @@ class CreateCamera
             'workspace_id' => ['required', 'integer', Rule::exists('workspaces', 'id')->whereNull('deleted_at')],
             'name' => ['required', 'string', 'max:255'],
             'location' => ['nullable', 'string', 'max:255'],
-            'stream_url' => ['required', 'string', 'regex:/^rtsp:\/\//i'],
+            'stream_url' => ['required', 'string', 'regex:/^rtsp:\/\//i', new StreamUrlHostIsSafe],
         ])->validate();
 
         $workspace = Workspace::findOrFail($validated['workspace_id']);
         $this->authorizeMembership($user, $workspace);
 
-        abort_if(Camera::count() >= self::MAX_CAMERAS, 422, 'You can register at most '.self::MAX_CAMERAS.' cameras.');
+        abort_if(
+            $workspace->cameras()->count() >= self::MAX_CAMERAS,
+            422,
+            'You can register at most '.self::MAX_CAMERAS.' cameras per workspace.'
+        );
 
         try {
             return DB::transaction(function () use ($user, $workspace, $validated) {

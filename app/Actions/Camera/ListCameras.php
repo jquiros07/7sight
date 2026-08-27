@@ -19,11 +19,14 @@ class ListCameras
 
     /**
      * List cameras in the workspaces the user belongs to, annotated with
-     * live status and HLS playback URL.
+     * live status and HLS playback URL. Pass $workspaceId to narrow this to
+     * a single workspace - it's intersected with the user's own workspace
+     * ids below, so requesting one the user doesn't belong to just yields
+     * an empty list rather than leaking another workspace's cameras.
      *
      * @return array<int, array<string, mixed>>
      */
-    public function __invoke(User $user): array
+    public function __invoke(User $user, ?int $workspaceId = null): array
     {
         $activePaths = $this->activePaths($this->mediaMtx);
         $workspaceIds = $user->workspaces()->pluck('workspaces.id');
@@ -36,9 +39,10 @@ class ListCameras
                 'activeRecording:camera_recordings.id,camera_recordings.camera_id,camera_recordings.ends_at',
             ])
             ->whereIn('workspace_id', $workspaceIds)
+            ->when($workspaceId, fn ($query, $workspaceId) => $query->where('workspace_id', $workspaceId))
             ->orderBy('name')
             ->get()
-            ->map(fn (Camera $camera) => $this->present($camera, $activePaths))
+            ->map(fn (Camera $camera) => $this->present($user, $camera, $activePaths))
             ->all();
     }
 }

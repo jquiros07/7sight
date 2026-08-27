@@ -65,11 +65,11 @@ class CreateCameraTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_it_enforces_the_five_camera_cap(): void
+    public function test_it_enforces_the_five_camera_cap_per_workspace(): void
     {
-        Camera::factory()->count(5)->create();
-        Http::fake();
         $workspace = Workspace::factory()->create();
+        Camera::factory()->count(5)->create(['workspace_id' => $workspace->id]);
+        Http::fake();
         $user = User::factory()->create();
         $this->assignWorkspaceRole($workspace, $user, 'member');
 
@@ -86,6 +86,23 @@ class CreateCameraTest extends TestCase
 
         $this->assertDatabaseCount('cameras', 5);
         Http::assertNothingSent();
+    }
+
+    public function test_the_cap_does_not_count_cameras_in_other_workspaces(): void
+    {
+        Camera::factory()->count(5)->create();
+        Http::fake(['*/v3/config/paths/add/*' => Http::response(status: 200)]);
+        $workspace = Workspace::factory()->create();
+        $user = User::factory()->create();
+        $this->assignWorkspaceRole($workspace, $user, 'member');
+
+        $camera = (app(CreateCamera::class))($user, [
+            'workspace_id' => $workspace->id,
+            'name' => 'First Camera Here',
+            'stream_url' => 'rtsp://192.168.1.15:554/stream1',
+        ]);
+
+        $this->assertSame($workspace->id, $camera->workspace_id);
     }
 
     public function test_it_requires_a_workspace_name_and_stream_url(): void
@@ -109,6 +126,21 @@ class CreateCameraTest extends TestCase
             'workspace_id' => $workspace->id,
             'name' => 'Bad URL',
             'stream_url' => 'https://example.com/stream',
+        ]);
+    }
+
+    public function test_it_rejects_a_stream_url_pointing_to_an_internal_host(): void
+    {
+        $workspace = Workspace::factory()->create();
+        $user = User::factory()->create();
+        $this->assignWorkspaceRole($workspace, $user, 'member');
+
+        $this->expectException(ValidationException::class);
+
+        (app(CreateCamera::class))($user, [
+            'workspace_id' => $workspace->id,
+            'name' => 'Suspicious',
+            'stream_url' => 'rtsp://169.254.169.254:554/stream1',
         ]);
     }
 

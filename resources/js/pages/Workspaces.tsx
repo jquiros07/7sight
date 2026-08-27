@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
-import { LayoutDashboard, Loader2, Pencil, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
+import { LayoutDashboard, Loader2, Pencil, Plus, Search, SlidersHorizontal, Trash2, Video, X } from 'lucide-react';
 import { HSOverlay } from 'preline';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -326,6 +326,17 @@ export default function Workspaces() {
                                                     label="Dashboard"
                                                     ariaLabel={`View ${workspace.name} dashboard`}
                                                     onClick={() => navigate(`/workspaces/${workspace.id}/dashboard`)}
+                                                    hoverClassName="hover:text-primary"
+                                                />
+                                                <ActionButton
+                                                    icon={<Video className="size-4" strokeWidth={1.75} />}
+                                                    label="Cameras"
+                                                    ariaLabel={`View ${workspace.name} cameras`}
+                                                    onClick={() =>
+                                                        navigate(`/cameras?workspace_id=${workspace.id}`, {
+                                                            state: { workspaceName: workspace.name },
+                                                        })
+                                                    }
                                                     hoverClassName="hover:text-primary"
                                                 />
                                                 {can(workspace.id, 'workspace.update') && (

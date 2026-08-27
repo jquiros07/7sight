@@ -25,13 +25,23 @@ trait AuthorizesWorkspaceAccess
 
     private function authorizePermission(User $user, Workspace $workspace, string $permission): void
     {
+        abort_if(! $this->userHasPermission($user, $workspace, $permission), 403);
+    }
+
+    /**
+     * Same rule as authorizePermission(), without aborting - for callers that
+     * need to branch on the result (e.g. masking a field) rather than reject
+     * the whole request.
+     */
+    private function userHasPermission(User $user, Workspace $workspace, string $permission): bool
+    {
         if ($workspace->owner_id === $user->id) {
-            return;
+            return true;
         }
 
         $this->setWorkspaceTeamContext($workspace);
 
-        abort_if(! $user->hasPermissionTo($permission), 403);
+        return $user->hasPermissionTo($permission);
     }
 
     /**

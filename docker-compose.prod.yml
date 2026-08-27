@@ -19,6 +19,14 @@ services:
   mysql:
     # Only app/analysis-worker need DB access, over the internal docker network.
     ports: !reset []
+    # Fail startup instead of silently falling back to the dev-only defaults
+    # baked into docker-compose.yml. A single required var here is enough -
+    # docker compose refuses to start ANY service in the stack if either is
+    # unset, since interpolation is resolved for the whole merged config
+    # up front.
+    environment:
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env before deploying to production}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env before deploying to production}
 
   mediamtx:
     # Only HLS needs to be reachable, and only through Caddy. The control API

@@ -41,7 +41,10 @@ return [
 
     'mediamtx' => [
         'api_url' => env('MEDIAMTX_API_URL', 'http://mediamtx:9997'),
-        'public_hls_url' => env('MEDIAMTX_PUBLIC_HLS_URL', 'http://localhost:8888'),
+        // Container-to-container only - the app proxies HLS playback itself
+        // (routes/api.php's cameras.hls route) rather than exposing MediaMTX's
+        // HLS server to browsers directly, so this never faces the internet.
+        'internal_hls_url' => env('MEDIAMTX_INTERNAL_HLS_URL', 'http://mediamtx:8888'),
     ],
 
 ];

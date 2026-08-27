@@ -34,6 +34,6 @@ class ShowCamera
             'activeRecording:camera_recordings.id,camera_recordings.camera_id,camera_recordings.ends_at',
         ]);
 
-        return $this->present($camera, $this->activePaths($this->mediaMtx));
+        return $this->present($user, $camera, $this->activePaths($this->mediaMtx));
     }
 }
