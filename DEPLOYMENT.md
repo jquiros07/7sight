@@ -62,7 +62,6 @@ Edit `.env`:
 - `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_DEFAULT_REGION` / `AWS_BUCKET` from step 1.
 - `SENTRY_LARAVEL_DSN` / `SENTRY_DSN` — optional but recommended (separate Sentry projects for the PHP app and the Python worker).
 - **Remove or comment out `COMPOSE_PROFILES=dev`.** This is what keeps the Vite dev server from starting in production — the `production` Docker build target (below) already ships pre-built assets.
-- `MEDIAMTX_API_URL` and `MEDIAMTX_INTERNAL_HLS_URL` can both stay at their defaults (`http://mediamtx:9997` / `http://mediamtx:8888`) — both are container-to-container only. The app itself proxies authenticated HLS playback to the browser (see the Caddyfile step below), so MediaMTX is never reachable from outside the docker network.
 
 ```bash
 cp Caddyfile.example Caddyfile

@@ -13,7 +13,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nodejs \
     npm \
     chromium \
-    ffmpeg \
     && docker-php-ext-install pdo_mysql mbstring bcmath gd zip opcache pcntl \
     && pecl install redis && docker-php-ext-enable redis \
     && apt-get clean && rm -rf /var/lib/apt/lists/*

@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'threat_assessment',
     'moderation',
     'text_detection',
+    'embedding',
 ])]
 class VideoInsight extends Model
 {
@@ -26,7 +27,25 @@ class VideoInsight extends Model
             'threat_assessment' => 'array',
             'moderation' => 'array',
             'text_detection' => 'array',
+            'embedding' => 'array',
         ];
+    }
+
+    /**
+     * A plain-text summary of this insight's populated fields, used as the
+     * input for generating a search embedding.
+     */
+    public function searchableText(): string
+    {
+        return collect([
+            'object_detection' => $this->object_detection,
+            'threat_assessment' => $this->threat_assessment,
+            'moderation' => $this->moderation,
+            'text_detection' => $this->text_detection,
+        ])
+            ->filter()
+            ->map(fn (array $value, string $field) => "{$field}: ".json_encode($value))
+            ->implode("\n\n");
     }
 
     public function video(): BelongsTo

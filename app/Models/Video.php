@@ -30,9 +30,6 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'analysis_types',
     'auto_start_analysis',
     'analysis_config',
-    'camera_recording_id',
-    'clip_start_seconds',
-    'clip_end_seconds',
 ])]
 class Video extends Model
 {
@@ -87,10 +84,5 @@ class Video extends Model
     public function inquiries(): HasMany
     {
         return $this->hasMany(VideoInquiry::class);
-    }
-
-    public function cameraRecording(): BelongsTo
-    {
-        return $this->belongsTo(CameraRecording::class);
     }
 }

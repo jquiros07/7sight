@@ -4,9 +4,7 @@ import type { ApexOptions } from 'apexcharts';
 import { AppLayout } from '@/components/AppLayout';
 import {
     AlertTriangle,
-    Camera,
     CheckCircle2,
-    Circle,
     Clock,
     Database,
     Download,
@@ -67,7 +65,6 @@ type LeaderboardWorkspace = {
     total_videos: number;
     failed_videos: number;
     flagged_count: number;
-    total_cameras: number;
     last_activity_at: string | null;
 };
 
@@ -88,8 +85,6 @@ type DashboardData = {
         processing_videos: number;
         stuck_processing_videos: number;
         total_inquiries: number;
-        total_cameras: number;
-        active_recordings: number;
         flagged_for_review: number;
     };
     uploads_over_time: { date: string; count: number }[];
@@ -184,15 +179,6 @@ function computeSuggestions(dashboard: DashboardData): Suggestion[] {
         });
     }
 
-    if (dashboard.stats.active_recordings > 0) {
-        const n = dashboard.stats.active_recordings;
-        suggestions.push({
-            icon: <Circle className="size-4 fill-current" strokeWidth={1.75} />,
-            tone: 'info',
-            text: `${n} camera${n === 1 ? '' : 's'} currently recording.`,
-        });
-    }
-
     const recentUploads = dashboard.uploads_over_time.reduce((sum, day) => sum + day.count, 0);
     if (recentUploads === 0) {
         suggestions.push({
@@ -283,7 +269,6 @@ function LeaderboardRow({ workspace, rank, onClick }: { workspace: LeaderboardWo
                 <p className="truncate text-sm font-medium text-foreground">{workspace.name}</p>
                 <p className="truncate text-xs text-muted-foreground-1">
                     {workspace.total_videos} video{workspace.total_videos === 1 ? '' : 's'}
-                    {workspace.total_cameras > 0 && ` · ${workspace.total_cameras} camera${workspace.total_cameras === 1 ? '' : 's'}`}
                     {workspace.last_activity_at && ` · last activity ${new Date(workspace.last_activity_at).toLocaleDateString()}`}
                 </p>
             </div>
@@ -422,11 +407,11 @@ export default function Dashboard() {
                     {/* Compact stat grid, in one card instead of separate cards per stat. Uses the
                         gap-as-divider trick (bg-card-line container + gap-px + bg-card cells) instead
                         of divide-x/divide-y, since those only border the first-in-DOM child and would
-                        wrongly draw a left border on the first cell of every wrapped row. Column count
-                        is fixed at 3 (9 stats / 3 = exactly 3 even rows) rather than a wider breakpoint
-                        like 5, which would leave a dangling empty cell with nothing to paint over the
-                        divider background on the last row. */}
-                    <Card className="mt-6 grid grid-cols-1 gap-px overflow-hidden bg-card-line sm:grid-cols-3">
+                        wrongly draw a left border on the first cell of every wrapped row. 2 columns at
+                        medium widths divides the 6 stats evenly (3 full rows, no dangling empty cell);
+                        all 6 sit on one row only at 1220px+, where there's enough width for them not to
+                        feel squeezed. */}
+                    <Card className="mt-6 grid grid-cols-1 gap-px overflow-hidden bg-card-line sm:grid-cols-2 min-[1220px]:grid-cols-6">
                         <StatCell icon={<Folder className="size-5" strokeWidth={1.75} />} label="Workspaces" value={String(dashboard.stats.total_workspaces)} />
                         <StatCell icon={<Video className="size-5" strokeWidth={1.75} />} label="Total videos" value={String(dashboard.stats.total_videos)} />
                         <StatCell icon={<Database className="size-5" strokeWidth={1.75} />} label="Storage used" value={formatFileSize(dashboard.stats.total_storage_bytes)} />
@@ -445,18 +430,6 @@ export default function Dashboard() {
                             icon={<Sparkles className="size-5" strokeWidth={1.75} />}
                             label="Inquiries asked"
                             value={String(dashboard.stats.total_inquiries)}
-                        />
-                        <StatCell icon={<Camera className="size-5" strokeWidth={1.75} />} label="Cameras" value={String(dashboard.stats.total_cameras)} />
-                        <StatCell
-                            icon={<Circle className="size-5 fill-current" strokeWidth={1.75} />}
-                            label="Recording now"
-                            value={String(dashboard.stats.active_recordings)}
-                        />
-                        <StatCell
-                            icon={<Flag className="size-5" strokeWidth={1.75} />}
-                            label="Needs review"
-                            value={String(dashboard.stats.flagged_for_review)}
-                            tone={dashboard.stats.flagged_for_review > 0 ? 'warning' : 'default'}
                         />
                     </Card>
 

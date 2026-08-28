@@ -2,15 +2,16 @@
 
 namespace App\Actions\Workspace;
 
+use App\Actions\Workspace\Concerns\AttachesWorkspaceMember;
 use App\Actions\Workspace\Concerns\GeneratesUniqueSlug;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
-use Spatie\Permission\PermissionRegistrar;
 
 class CreateWorkspace
 {
+    use AttachesWorkspaceMember;
     use GeneratesUniqueSlug;
 
     /**
@@ -34,13 +35,7 @@ class CreateWorkspace
             'description' => $validated['description'] ?? null,
         ]);
 
-        // Kept even though the spatie role assignment below is what actually
-        // gates access now - resources/js/pages/Workspaces.tsx still reads
-        // this pivot's role directly for its own display.
-        $workspace->users()->attach($user->id, ['role' => 'owner']);
-
-        app(PermissionRegistrar::class)->setPermissionsTeamId($workspace->id);
-        $user->assignRole('owner');
+        $this->attachMember($workspace, $user, 'owner');
 
         return $workspace;
     }

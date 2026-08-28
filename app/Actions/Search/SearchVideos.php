@@ -8,6 +8,8 @@ use App\Models\Video;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use Laravel\Ai\Embeddings;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Throwable;
@@ -15,6 +17,13 @@ use Throwable;
 class SearchVideos
 {
     private const MAX_CANDIDATES = 200;
+
+    /**
+     * How many embedding-ranked candidates get sent to the search agent for
+     * relevance/reason ranking. Keeps that single Gemini call's prompt small
+     * regardless of how many analyzed videos exist.
+     */
+    private const TOP_K = 15;
 
     /**
      * Search the user's analyzed videos with a free-text query. Uses a single
@@ -49,13 +58,62 @@ class SearchVideos
             return ['query' => $query, 'candidates_searched' => 0, 'matches' => []];
         }
 
-        $result = $this->promptForMatches($query, $videos);
+        $topCandidates = $this->rankByEmbeddingSimilarity($query, $videos);
+
+        $result = $this->promptForMatches($query, $topCandidates);
 
         return [
             'query' => $query,
             'candidates_searched' => $videos->count(),
             'matches' => $this->resolveMatches($result['matches'] ?? [], $videos),
         ];
+    }
+
+    /**
+     * Narrow the full candidate pool down to the TOP_K most semantically
+     * similar to the query, using each video's precomputed insight
+     * embedding - so the search agent only has to rank/explain a handful of
+     * videos instead of every analyzed video in the workspace. Candidates
+     * without an embedding yet (not yet backfilled, or embedding generation
+     * failed) are excluded from ranking; if none have one, falls back to the
+     * most recent TOP_K so search still returns something.
+     *
+     * @param  Collection<int, Video>  $videos
+     * @return Collection<int, Video>
+     */
+    private function rankByEmbeddingSimilarity(string $query, Collection $videos): Collection
+    {
+        $embedded = $videos->filter(fn (Video $video) => $video->latestInsight?->embedding !== null);
+
+        if ($embedded->isEmpty()) {
+            return $videos->take(self::TOP_K);
+        }
+
+        $queryEmbedding = Embeddings::for([$query])->generate(Lab::Gemini)->first();
+
+        return $embedded
+            ->sortByDesc(fn (Video $video) => $this->cosineSimilarity($queryEmbedding, $video->latestInsight->embedding))
+            ->take(self::TOP_K)
+            ->values();
+    }
+
+    /**
+     * @param  array<int, float>  $a
+     * @param  array<int, float>  $b
+     */
+    private function cosineSimilarity(array $a, array $b): float
+    {
+        $dot = 0.0;
+        $normA = 0.0;
+        $normB = 0.0;
+
+        foreach ($a as $i => $value) {
+            $dot += $value * $b[$i];
+            $normA += $value ** 2;
+            $normB += $b[$i] ** 2;
+        }
+
+        return $dot / ((sqrt($normA) * sqrt($normB)) ?: 1);
     }
 
     /**

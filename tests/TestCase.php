@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\Actions\Workspace\Concerns\AttachesWorkspaceMember;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
@@ -9,6 +10,8 @@ use Spatie\Permission\PermissionRegistrar;
 
 abstract class TestCase extends BaseTestCase
 {
+    use AttachesWorkspaceMember;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -23,13 +26,10 @@ abstract class TestCase extends BaseTestCase
      * Attach a user to a workspace with the given role, both on the legacy
      * pivot column (still read by resources/js/pages/Workspaces.tsx) and as
      * a real spatie role scoped to that workspace - mirrors what production
-     * code does in CreateWorkspace/tinker-based member assignment.
+     * code does in CreateWorkspace.
      */
     protected function assignWorkspaceRole(Workspace $workspace, User $user, string $role): void
     {
-        $workspace->users()->attach($user->id, ['role' => $role]);
-
-        app(PermissionRegistrar::class)->setPermissionsTeamId($workspace->id);
-        $user->assignRole($role);
+        $this->attachMember($workspace, $user, $role);
     }
 }

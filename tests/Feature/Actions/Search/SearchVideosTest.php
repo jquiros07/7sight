@@ -11,6 +11,7 @@ use App\Models\VideoInsight;
 use App\Models\Workspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
+use Laravel\Ai\Embeddings;
 use Tests\TestCase;
 
 class SearchVideosTest extends TestCase
@@ -122,5 +123,72 @@ class SearchVideosTest extends TestCase
         VideoSearchAgent::assertPrompted(
             fn ($prompt) => str_contains($prompt->prompt, 'forklift near the dock')
         );
+    }
+
+    public function test_it_only_ranks_candidates_that_have_an_embedding(): void
+    {
+        Embeddings::fake([[[0.5, 0.5]]]);
+        VideoSearchAgent::fake([['matches' => []]]);
+
+        $user = User::factory()->create();
+        $workspace = Workspace::factory()->create();
+        $this->assignWorkspaceRole($workspace, $user, 'owner');
+
+        $embeddedVideo = Video::factory()->create(['workspace_id' => $workspace->id]);
+        VideoInsight::create([
+            'video_id' => $embeddedVideo->id,
+            'object_detection' => ['summary' => 'a forklift'],
+            'embedding' => [0.5, 0.5],
+        ]);
+
+        $unembeddedVideo = Video::factory()->create(['workspace_id' => $workspace->id]);
+        VideoInsight::create([
+            'video_id' => $unembeddedVideo->id,
+            'object_detection' => ['summary' => 'a forklift'],
+        ]);
+
+        (new SearchVideos)($user, ['query' => 'forklift']);
+
+        VideoSearchAgent::assertPrompted(function ($prompt) use ($embeddedVideo, $unembeddedVideo) {
+            $videoIds = array_column(json_decode($prompt->prompt, true)['videos'], 'video_id');
+
+            return in_array($embeddedVideo->id, $videoIds, true)
+                && ! in_array($unembeddedVideo->id, $videoIds, true);
+        });
+    }
+
+    public function test_it_caps_ranked_candidates_to_the_top_k_most_similar(): void
+    {
+        $farEmbedding = [1.0, 0.0];
+        $nearEmbedding = [0.0, 1.0];
+
+        Embeddings::fake([[$nearEmbedding]]);
+        VideoSearchAgent::fake([['matches' => []]]);
+
+        $user = User::factory()->create();
+        $workspace = Workspace::factory()->create();
+        $this->assignWorkspaceRole($workspace, $user, 'owner');
+
+        Video::factory()->count(16)->create(['workspace_id' => $workspace->id])
+            ->each(fn (Video $video) => VideoInsight::create([
+                'video_id' => $video->id,
+                'object_detection' => ['summary' => 'noise'],
+                'embedding' => $farEmbedding,
+            ]));
+
+        $bestMatch = Video::factory()->create(['workspace_id' => $workspace->id]);
+        VideoInsight::create([
+            'video_id' => $bestMatch->id,
+            'object_detection' => ['summary' => 'forklift'],
+            'embedding' => $nearEmbedding,
+        ]);
+
+        (new SearchVideos)($user, ['query' => 'forklift']);
+
+        VideoSearchAgent::assertPrompted(function ($prompt) use ($bestMatch) {
+            $videoIds = array_column(json_decode($prompt->prompt, true)['videos'], 'video_id');
+
+            return count($videoIds) === 15 && in_array($bestMatch->id, $videoIds, true);
+        });
     }
 }

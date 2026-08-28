@@ -34,8 +34,6 @@
         <tr><td>Stuck processing (30+ min)</td><td>{{ $dashboard['stats']['stuck_processing_videos'] }}</td></tr>
         <tr><td>Failed videos</td><td>{{ $dashboard['stats']['failed_videos'] }}</td></tr>
         <tr><td>Inquiries asked</td><td>{{ $dashboard['stats']['total_inquiries'] }}</td></tr>
-        <tr><td>Cameras</td><td>{{ $dashboard['stats']['total_cameras'] }}</td></tr>
-        <tr><td>Recording now</td><td>{{ $dashboard['stats']['active_recordings'] }}</td></tr>
         <tr><td>Needs review</td><td>{{ $dashboard['stats']['flagged_for_review'] }}</td></tr>
     </table>
 
@@ -90,7 +88,7 @@
     @if (! empty($dashboard['workspace_leaderboard']))
         <table>
             <thead>
-                <tr><th>Name</th><th>Videos</th><th>Failed</th><th>Flagged</th><th>Cameras</th><th>Last activity</th></tr>
+                <tr><th>Name</th><th>Videos</th><th>Failed</th><th>Flagged</th><th>Last activity</th></tr>
             </thead>
             <tbody>
                 @foreach ($dashboard['workspace_leaderboard'] as $workspace)
@@ -99,7 +97,6 @@
                         <td>{{ $workspace['total_videos'] }}</td>
                         <td>{{ $workspace['failed_videos'] }}</td>
                         <td>{{ $workspace['flagged_count'] }}</td>
-                        <td>{{ $workspace['total_cameras'] }}</td>
                         <td>{{ $workspace['last_activity_at']?->format('M j, Y') ?? '—' }}</td>
                     </tr>
                 @endforeach

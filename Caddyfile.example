@@ -1,10 +1,3 @@
 your-domain.com {
-    # Live camera HLS streams are NOT proxied directly to MediaMTX here -
-    # MediaMTX has no authentication of its own, and camera paths are
-    # deterministic (camera-{id}), so anyone who guessed a URL could watch
-    # any camera's feed. Playback goes through the app instead (see
-    # app/Actions/Camera/StreamCameraHls.php), which enforces the same
-    # workspace-membership check as the rest of the API, so it's covered by
-    # the reverse_proxy below like everything else.
     reverse_proxy app:80
 }

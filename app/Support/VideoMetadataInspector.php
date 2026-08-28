@@ -6,7 +6,7 @@ use getID3;
 
 /**
  * Thin wrapper around getID3, used wherever a video file on disk needs its
- * duration/dimensions read back (upload validation, camera recording clips).
+ * duration/dimensions read back (upload validation).
  */
 class VideoMetadataInspector
 {

@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Actions\Workspace\ConsumePendingInvitations;
+use Illuminate\Auth\Events\Verified;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Spatie\Browsershot\Browsershot;
@@ -22,6 +25,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Event::listen(Verified::class, fn (Verified $event) => app(ConsumePendingInvitations::class)($event->user));
+
         $this->app->bind(PdfFactory::class, fn () => (new PdfFactory)->withBrowsershot(
             function (Browsershot $browsershot) {
                 // php-fpm's www-data user's home directory (/var/www) isn't

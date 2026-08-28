@@ -47,10 +47,6 @@
         <tr><td>Failed jobs</td><td>{{ $dashboard['stats']['failed_jobs'] }}</td></tr>
         <tr><td>Needs review</td><td>{{ $dashboard['stats']['flagged_for_review'] }}</td></tr>
         <tr><td>Avg. processing time</td><td>{{ \App\Support\ReportFormatter::duration($dashboard['stats']['avg_processing_seconds']) }}</td></tr>
-        <tr><td>Cameras</td><td>{{ $dashboard['stats']['total_cameras'] }}</td></tr>
-        <tr><td>Recording now</td><td>{{ $dashboard['stats']['active_recordings'] }}</td></tr>
-        <tr><td>Total recordings</td><td>{{ $dashboard['stats']['total_recordings'] }}</td></tr>
-        <tr><td>Recording storage</td><td>{{ \App\Support\ReportFormatter::fileSize($dashboard['stats']['total_recording_storage_bytes']) }}</td></tr>
     </table>
 
     <h2>Safety</h2>
@@ -154,26 +150,6 @@
         ])
     @else
         <p class="muted">No moderation assessments yet.</p>
-    @endif
-
-    @if ($dashboard['stats']['total_cameras'] > 0)
-        <h2>Recordings by status</h2>
-        @if ($dashboard['stats']['total_recordings'] > 0)
-            @include('pdfs.partials.charts.donut-chart', [
-                'id' => 'chart-recordings-by-status',
-                'labels' => ['Recording', 'Completed', 'Failed', 'Cancelled'],
-                'colors' => ['#ef4444', '#22c55e', '#f59e0b', '#0891b2'],
-                'series' => [
-                    $dashboard['recordings_by_status']['recording'],
-                    $dashboard['recordings_by_status']['completed'],
-                    $dashboard['recordings_by_status']['failed'],
-                    $dashboard['recordings_by_status']['cancelled'],
-                ],
-                'totalLabel' => 'Recordings',
-            ])
-        @else
-            <p class="muted">No recordings yet.</p>
-        @endif
     @endif
 
     <h2>Upload trend (last 14 days)</h2>

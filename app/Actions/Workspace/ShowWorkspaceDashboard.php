@@ -4,10 +4,8 @@ namespace App\Actions\Workspace;
 
 use App\Actions\Workspace\Concerns\AuthorizesWorkspaceAccess;
 use App\Enums\AnalysisType;
-use App\Enums\CameraRecordingStatus;
 use App\Enums\VideoStatus;
 use App\Models\AnalysisJob;
-use App\Models\CameraRecording;
 use App\Models\User;
 use App\Models\Video;
 use App\Models\VideoInsight;
@@ -46,12 +44,6 @@ class ShowWorkspaceDashboard
         $jobs = $videos->flatMap->analysisJobs;
         $insightSummary = $workspace->latestInsightSummary;
 
-        $cameraIds = $workspace->cameras()->pluck('id');
-        $recordings = CameraRecording::query()
-            ->select(['id', 'camera_id', 'status', 'size'])
-            ->whereIn('camera_id', $cameraIds)
-            ->get();
-
         return [
             'workspace' => [
                 'id' => $workspace->id,
@@ -70,19 +62,11 @@ class ShowWorkspaceDashboard
                 'failed_jobs' => $jobs->where('status', 'failed')->count(),
                 'flagged_for_review' => $jobs->whereNotNull('flagged_for_review_at')->count(),
                 'avg_processing_seconds' => $this->avgProcessingSeconds($jobs),
-                'total_cameras' => $cameraIds->count(),
-                'total_recordings' => $recordings->count(),
-                'active_recordings' => $recordings->where('status', CameraRecordingStatus::Recording)->count(),
-                'total_recording_storage_bytes' => (int) $recordings->sum('size'),
             ],
             'uploads_over_time' => $this->uploadsOverTime($videos),
             'videos_by_status' => $this->countsByValues(
                 $videos->countBy(fn (Video $video) => $video->status->value),
                 array_column(VideoStatus::cases(), 'value'),
-            ),
-            'recordings_by_status' => $this->countsByValues(
-                $recordings->countBy(fn (CameraRecording $recording) => $recording->status->value),
-                array_column(CameraRecordingStatus::cases(), 'value'),
             ),
             'jobs_by_type' => $this->countsByValues(
                 $jobs->countBy(fn (AnalysisJob $job) => $job->type->value),

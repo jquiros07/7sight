@@ -16,6 +16,8 @@ use App\Models\VideoInsight;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Embeddings;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Throwable;
@@ -93,11 +95,13 @@ class GenerateVideoInsights
             ),
         ];
 
-        VideoInsight::create([
+        $insight = VideoInsight::create([
             'video_id' => $video->id,
             'user_id' => $user->id,
             ...$result,
         ]);
+
+        $this->generateEmbedding($insight);
 
         if ($video->insights_failed_at !== null) {
             $video->forceFill(['insights_failed_at' => null])->save();
@@ -139,6 +143,22 @@ class GenerateVideoInsights
         Log::info('Insights agent responded', ['agent' => $agentName]);
 
         return $result;
+    }
+
+    /**
+     * Generate and store a search embedding for this insight. Failure here
+     * is logged but never blocks insight generation - embeddings are a
+     * search-optimization side effect, not the primary value of this action.
+     */
+    private function generateEmbedding(VideoInsight $insight): void
+    {
+        try {
+            $embedding = Embeddings::for([$insight->searchableText()])->generate(Lab::Gemini)->first();
+
+            $insight->update(['embedding' => $embedding]);
+        } catch (Throwable $e) {
+            Log::error($e->getMessage(), ['exception' => $e, 'video_insight_id' => $insight->id]);
+        }
     }
 
     /**

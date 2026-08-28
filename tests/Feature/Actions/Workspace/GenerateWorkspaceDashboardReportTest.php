@@ -5,8 +5,6 @@ namespace Tests\Feature\Actions\Workspace;
 use App\Actions\Workspace\GenerateWorkspaceDashboardReport;
 use App\Enums\AnalysisType;
 use App\Models\AnalysisJob;
-use App\Models\Camera;
-use App\Models\CameraRecording;
 use App\Models\User;
 use App\Models\Video;
 use App\Models\VideoInsight;
@@ -23,8 +21,8 @@ class GenerateWorkspaceDashboardReportTest extends TestCase
     /**
      * Deliberately does not fake/mock Browsershot - see GenerateVideoReportTest
      * for why: a real render is the only way to catch a Blade error in a
-     * populated branch (workspace summary, needs review, cameras/recordings),
-     * since an empty-state render alone wouldn't exercise those.
+     * populated branch (workspace summary, needs review), since an
+     * empty-state render alone wouldn't exercise those.
      */
     public function test_it_renders_a_real_pdf_with_populated_data(): void
     {
@@ -52,9 +50,6 @@ class GenerateWorkspaceDashboardReportTest extends TestCase
             'threat_assessment' => ['threat_detected' => true, 'risk_level' => 'HIGH'],
             'moderation' => ['status' => 'REVIEW', 'severity' => 'MEDIUM'],
         ]);
-
-        $camera = Camera::factory()->create(['workspace_id' => $workspace->id]);
-        CameraRecording::factory()->create(['camera_id' => $camera->id]);
 
         $pdf = (app(GenerateWorkspaceDashboardReport::class))($member, $workspace);
 

@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
-import { LayoutDashboard, Loader2, Pencil, Plus, Search, SlidersHorizontal, Trash2, Video, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LayoutDashboard, Loader2, Pencil, Plus, Search, SlidersHorizontal, Trash2, Users, X } from 'lucide-react';
 import { HSOverlay } from 'preline';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -329,14 +329,10 @@ export default function Workspaces() {
                                                     hoverClassName="hover:text-primary"
                                                 />
                                                 <ActionButton
-                                                    icon={<Video className="size-4" strokeWidth={1.75} />}
-                                                    label="Cameras"
-                                                    ariaLabel={`View ${workspace.name} cameras`}
-                                                    onClick={() =>
-                                                        navigate(`/cameras?workspace_id=${workspace.id}`, {
-                                                            state: { workspaceName: workspace.name },
-                                                        })
-                                                    }
+                                                    icon={<Users className="size-4" strokeWidth={1.75} />}
+                                                    label="Members"
+                                                    ariaLabel={`View ${workspace.name} members`}
+                                                    onClick={() => navigate(`/workspaces/${workspace.id}/members`)}
                                                     hoverClassName="hover:text-primary"
                                                 />
                                                 {can(workspace.id, 'workspace.update') && (
@@ -373,10 +369,12 @@ export default function Workspaces() {
                     </p>
                     <div className="flex gap-2">
                         <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                            <ChevronLeft className="size-4" strokeWidth={1.75} />
                             Previous
                         </Button>
                         <Button variant="secondary" disabled={page >= workspaces.last_page} onClick={() => setPage((p) => p + 1)}>
                             Next
+                            <ChevronRight className="size-4" strokeWidth={1.75} />
                         </Button>
                     </div>
                 </div>

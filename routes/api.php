@@ -1,7 +1,5 @@
 <?php
 
-use App\Http\Controllers\CameraController;
-use App\Http\Controllers\CameraRecordingController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\ObjectDetectionCategoryController;
@@ -9,6 +7,7 @@ use App\Http\Controllers\SearchController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VideoController;
 use App\Http\Controllers\WorkspaceController;
+use App\Http\Controllers\WorkspaceMemberController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -27,6 +26,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/workspaces/{workspace}/dashboard', [WorkspaceController::class, 'dashboard']);
     Route::get('/workspaces/{workspace}/dashboard/report', [WorkspaceController::class, 'dashboardReport'])->middleware('throttle:10,1');
     Route::post('/workspaces/{workspace}/insight-summary', [WorkspaceController::class, 'generateInsightSummary'])->middleware('throttle:10,1');
+    Route::get('/workspaces/{workspace}/members', [WorkspaceMemberController::class, 'index']);
+    Route::post('/workspaces/{workspace}/members', [WorkspaceMemberController::class, 'invite']);
+    Route::patch('/workspaces/{workspace}/members/{member}', [WorkspaceMemberController::class, 'updateRole']);
+    Route::delete('/workspaces/{workspace}/members/{member}', [WorkspaceMemberController::class, 'remove']);
+    Route::delete('/workspaces/{workspace}/invitations/{invitation}', [WorkspaceMemberController::class, 'cancelInvitation']);
     Route::apiResource('videos', VideoController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
     Route::post('/videos/{video}/analyze', [VideoController::class, 'analyze'])->middleware('throttle:5,1');
     Route::get('/videos/{video}/stream', [VideoController::class, 'stream']);
@@ -37,18 +41,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/videos/{video}/analysis-jobs/{analysisJob}/flag', [VideoController::class, 'flagAnalysisJob'])->middleware('throttle:20,1');
     Route::delete('/videos/{video}/analysis-jobs/{analysisJob}/flag', [VideoController::class, 'unflagAnalysisJob']);
     Route::get('/object-detection-categories', [ObjectDetectionCategoryController::class, 'index']);
-    Route::apiResource('cameras', CameraController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
-    Route::get('/cameras/{camera}/hls/{path}', [CameraController::class, 'hls'])
-        ->where('path', '.*')
-        ->name('cameras.hls');
-    Route::prefix('cameras/{camera}')->group(function () {
-        Route::get('/recordings', [CameraRecordingController::class, 'index']);
-        Route::post('/recordings', [CameraRecordingController::class, 'store']);
-        Route::post('/recordings/{recording}/cancel', [CameraRecordingController::class, 'cancel']);
-        Route::post('/recordings/{recording}/clip', [CameraRecordingController::class, 'clip']);
-        Route::get('/recordings/{recording}/download', [CameraRecordingController::class, 'download']);
-        Route::get('/recordings/{recording}/stream', [CameraRecordingController::class, 'stream']);
-    });
 });
 
 // Called by the analysis-worker (not a browser client) once a video's

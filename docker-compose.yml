@@ -1,6 +1,3 @@
-include:
-  - docker-compose.cameras.yml
-
 x-app: &app
   build:
     context: .
@@ -19,14 +16,10 @@ x-app: &app
     REDIS_PORT: 6379
     XDEBUG_MODE: ${XDEBUG_MODE:-debug,develop}
     INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-}
-    MEDIAMTX_API_URL: http://mediamtx:9997
-    MEDIAMTX_INTERNAL_HLS_URL: ${MEDIAMTX_INTERNAL_HLS_URL:-http://mediamtx:8888}
   depends_on:
     mysql:
       condition: service_healthy
     redis:
-      condition: service_started
-    mediamtx:
       condition: service_started
   restart: unless-stopped
 

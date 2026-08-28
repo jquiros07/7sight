@@ -3,10 +3,6 @@ import { Route, Routes, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { RequireAuth } from './lib/RequireAuth';
 
-const CameraCreate = lazy(() => import('./pages/CameraCreate'));
-const CameraEdit = lazy(() => import('./pages/CameraEdit'));
-const CameraRecordings = lazy(() => import('./pages/CameraRecordings'));
-const Cameras = lazy(() => import('./pages/Cameras'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Home = lazy(() => import('./pages/Home'));
 const Login = lazy(() => import('./pages/Login'));
@@ -21,6 +17,7 @@ const Videos = lazy(() => import('./pages/Videos'));
 const WorkspaceCreate = lazy(() => import('./pages/WorkspaceCreate'));
 const WorkspaceDashboard = lazy(() => import('./pages/WorkspaceDashboard'));
 const WorkspaceEdit = lazy(() => import('./pages/WorkspaceEdit'));
+const WorkspaceMembers = lazy(() => import('./pages/WorkspaceMembers'));
 const Workspaces = lazy(() => import('./pages/Workspaces'));
 
 function RouteFallback() {
@@ -101,38 +98,6 @@ export default function Router() {
                     }
                 />
                 <Route
-                    path="/cameras"
-                    element={
-                        <RequireAuth>
-                            <Cameras />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/cameras/create"
-                    element={
-                        <RequireAuth>
-                            <CameraCreate />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/cameras/:id/edit"
-                    element={
-                        <RequireAuth>
-                            <CameraEdit />
-                        </RequireAuth>
-                    }
-                />
-                <Route
-                    path="/cameras/:id/recordings"
-                    element={
-                        <RequireAuth>
-                            <CameraRecordings />
-                        </RequireAuth>
-                    }
-                />
-                <Route
                     path="/workspaces"
                     element={
                         <RequireAuth>
@@ -161,6 +126,14 @@ export default function Router() {
                     element={
                         <RequireAuth>
                             <WorkspaceDashboard />
+                        </RequireAuth>
+                    }
+                />
+                <Route
+                    path="/workspaces/:id/members"
+                    element={
+                        <RequireAuth>
+                            <WorkspaceMembers />
                         </RequireAuth>
                     }
                 />

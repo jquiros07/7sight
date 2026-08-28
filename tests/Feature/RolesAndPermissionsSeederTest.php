@@ -27,13 +27,12 @@ class RolesAndPermissionsSeederTest extends TestCase
 
         $this->assertFalse($member->hasPermissionTo('workspace.update'));
         $this->assertFalse($member->hasPermissionTo('workspace.delete'));
-        $this->assertFalse($member->hasPermissionTo('recordings.start'));
         $this->assertFalse($member->hasPermissionTo('videos.analyze'));
         $this->assertFalse($member->hasPermissionTo('videos.generate-insights'));
         $this->assertFalse($member->hasPermissionTo('videos.inquire'));
         $this->assertFalse($member->hasPermissionTo('videos.update'));
         $this->assertFalse($member->hasPermissionTo('videos.delete'));
-        $this->assertTrue($member->hasPermissionTo('cameras.create'));
+        $this->assertTrue($member->hasPermissionTo('videos.view'));
         $this->assertTrue($member->hasPermissionTo('videos.upload'));
     }
 

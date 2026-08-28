@@ -1,4 +1,4 @@
-import { Camera, Folder, LayoutDashboard, Menu, Search, Video } from 'lucide-react';
+import { Folder, LayoutDashboard, Menu, Search, Video } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import logo from '../../images/7sight.png';
@@ -14,7 +14,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-export type NavKey = 'dashboard' | 'videos' | 'search' | 'cameras' | 'workspaces' | 'profile';
+export type NavKey = 'dashboard' | 'videos' | 'search' | 'workspaces' | 'profile';
 
 function initials(name: string) {
     return name
@@ -71,7 +71,6 @@ const NAV_ITEMS: { key: NavKey; label: string; icon: ReactNode; href?: string; s
     { key: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard {...iconProps} />, href: '/dashboard' },
     { key: 'videos', label: 'Videos', icon: <Video {...iconProps} />, href: '/videos' },
     { key: 'search', label: 'AI Search', icon: <Search {...iconProps} />, href: '/search' },
-    { key: 'cameras', label: 'Cameras', icon: <Camera {...iconProps} />, href: '/cameras' },
     { key: 'workspaces', label: 'Workspaces', icon: <Folder {...iconProps} />, href: '/workspaces' },
 ];
 

@@ -50,13 +50,12 @@ analysis providers behind the same interface.
 
 ## Features
 
-**Workspaces** — shared containers for videos and cameras, with per-workspace
-roles (owner / admin / member) enforced by a real permission system (Spatie
+**Workspaces** — shared containers for videos, with per-workspace roles
+(owner / admin / member) enforced by a real permission system (Spatie
 Laravel Permission, one global role catalog assigned per workspace via its
-teams feature). Day-to-day actions — upload, camera management, editing your
-own content — are open to any member; cost-driving actions that trigger real
-AWS/Gemini/ffmpeg spend (starting a camera recording, AI analysis, AI
-insights, Inquire) require admin or owner.
+teams feature). Day-to-day actions — upload, editing your own content — are
+open to any member; cost-driving actions that trigger real AWS/Gemini spend
+(AI analysis, AI insights, Inquire) require admin or owner.
 
 **Video upload** — a two-step wizard:
 1. File (drag-and-drop or picker), title, description, workspace. Uploads are
@@ -71,20 +70,6 @@ insights, Inquire) require admin or owner.
    - **Threat Detection** — correlates weapon/hazard objects with content-moderation violence labels.
    - **Text/OCR Detection** — reads on-screen text (signage, captions, labels) via Rekognition's text-detection API.
    - Optional auto-start: begin analysis immediately after upload finishes.
-
-**Cameras & live recording** — a workspace-scoped IP camera registry (5 total
-across the whole installation) with a live dashboard: MediaMTX pulls each
-camera's RTSP feed and restreams it as HLS for in-browser viewing, with paths
-reconciled against the database on every app boot so a MediaMTX restart never
-strands a camera. From a camera, start a timed recording (preset durations up
-to 8h) — an isolated `recorder` service runs ffmpeg so a long recording can't
-block or be killed by an app deploy — then cut a clip from any completed
-recording using a dual-handle trim slider synced live to a video preview
-(dragging a handle seeks the preview frame; playback loops within the
-selected range). The clip is re-encoded (not stream-copied) to keep file
-sizes reasonable regardless of the source camera's bitrate, and becomes a
-regular `Video` that flows into the same analysis pipeline below, optionally
-auto-starting analysis.
 
 **Video management** — sortable/paginated list with live status
 (`uploaded → processing → ready`/`failed`), edit (same wizard, editable
@@ -196,7 +181,6 @@ attempts, error messages) queryable without a separate dashboard.
 - [Laravel Sanctum](https://laravel.com/docs/sanctum) — API auth for the SPA
 - [laravel/ai](https://github.com/laravel/ai) + Google Gemini — six structured-output agents: one per analysis type, plus cross-video Search and per-video Inquire
 - [Spatie Laravel Permission](https://spatie.be/docs/laravel-permission) — per-workspace roles/permissions (teams feature), enforced across every Action
-- ffmpeg — camera recording capture and clip re-encoding, invoked via Laravel's `Process` facade
 - MySQL 8.4
 - Redis 7 — two independent uses: the Redis Stream (+ consumer group) that hands analysis jobs to the Python worker, and Laravel's own queue (`queue:work`, run via Supervisor) for insight generation
 - [Spatie Laravel PDF](https://github.com/spatie/laravel-pdf) + Browsershot (headless Chrome) — video report export
@@ -217,7 +201,7 @@ attempts, error messages) queryable without a separate dashboard.
 - `sentry-sdk` — error tracking + performance tracing, mirroring the PHP side; continues the distributed trace the PHP app started, across the Redis Stream queue boundary
 
 **Infrastructure**
-- Docker Compose: `app`, `mysql`, `redis`, `analysis-worker` (horizontally scaled), `mediamtx` (RTSP→HLS restreaming for live cameras), `recorder` (isolated ffmpeg recording queue worker, kept separate so a multi-hour recording survives an app deploy), `vite` (dev only)
+- Docker Compose: `app`, `mysql`, `redis`, `analysis-worker` (horizontally scaled), `vite` (dev only)
 - Multi-stage Dockerfile with separate `dev` and `production` targets
 - Supervisor inside the `app` container runs nginx, PHP-FPM, and a Laravel queue worker side by side
 - Caddy — reverse proxy and automatic HTTPS in production

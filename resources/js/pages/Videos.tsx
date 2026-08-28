@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
-import { Eye, Loader2, Pencil, Plus, Search, SlidersHorizontal, Sparkles, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, Loader2, Pencil, Plus, Search, SlidersHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import { HSOverlay } from 'preline';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -527,10 +527,12 @@ export default function Videos() {
                     </p>
                     <div className="flex gap-2">
                         <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                            <ChevronLeft className="size-4" strokeWidth={1.75} />
                             Previous
                         </Button>
                         <Button variant="secondary" disabled={page >= videos.last_page} onClick={() => setPage((p) => p + 1)}>
                             Next
+                            <ChevronRight className="size-4" strokeWidth={1.75} />
                         </Button>
                     </div>
                 </div>

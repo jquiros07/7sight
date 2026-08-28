@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { getErrorMessages } from '../lib/errors';
 import { UserPlus } from 'lucide-react';
@@ -13,8 +13,10 @@ import logo from '../../images/7sight.png';
 export default function Register() {
     const { register } = useAuth();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const invitedWorkspace = searchParams.get('workspace');
     const [name, setName] = useState('');
-    const [email, setEmail] = useState('');
+    const [email, setEmail] = useState(searchParams.get('email') ?? '');
     const [password, setPassword] = useState('');
     const [passwordConfirmation, setPasswordConfirmation] = useState('');
     const [errors, setErrors] = useState<string[]>([]);
@@ -43,8 +45,12 @@ export default function Register() {
             <h3 className="font-heading text-lg font-semibold text-foreground/80 pb-4">Video Intelligence Platform</h3>
             <Card className="w-full max-w-sm">
                 <CardHeader>
-                    <CardTitle>Create an account</CardTitle>
-                    <CardDescription>Enter your details to get started.</CardDescription>
+                    <CardTitle>{invitedWorkspace ? `Join ${invitedWorkspace}` : 'Create an account'}</CardTitle>
+                    <CardDescription>
+                        {invitedWorkspace
+                            ? `You've been invited to ${invitedWorkspace} - create an account with this email to accept.`
+                            : 'Enter your details to get started.'}
+                    </CardDescription>
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">

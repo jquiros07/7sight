@@ -10,11 +10,6 @@ class RolesAndPermissionsSeeder extends Seeder
 {
     private const PERMISSIONS = [
         'workspace.view', 'workspace.update', 'workspace.delete',
-        'cameras.view', 'cameras.create', 'cameras.update', 'cameras.delete',
-        'cameras.view-credentials',
-        'cameras.download-recording', 'cameras.stream-recording',
-        'recordings.list', 'recordings.start', 'recordings.cancel',
-        'recordings.create-video-clip',
         'videos.upload', 'videos.view', 'videos.stream',
         'videos.generate-report', 'videos.list-inquiries',
         'videos.update', 'videos.delete',
@@ -30,8 +25,7 @@ class RolesAndPermissionsSeeder extends Seeder
      */
     private const ADMIN_ONLY = [
         'workspace.update',
-        'cameras.view-credentials',
-        'recordings.start', 'videos.analyze', 'videos.generate-insights', 'videos.inquire',
+        'videos.analyze', 'videos.generate-insights', 'videos.inquire',
         'videos.update', 'videos.delete',
     ];
 

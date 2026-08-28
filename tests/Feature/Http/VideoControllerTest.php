@@ -9,9 +9,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Exercises the real HTTP route/controller layer - see CameraControllerTest
- * for why: the Action-level tests wouldn't catch a controller-level mistake
- * building the explicit field array now that $request->all() is gone.
+ * Exercises the real HTTP route/controller layer - Action-level tests alone
+ * wouldn't catch a controller-level mistake building the explicit field
+ * array now that $request->all() is gone.
  */
 class VideoControllerTest extends TestCase
 {

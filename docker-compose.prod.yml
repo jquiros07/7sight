@@ -28,11 +28,6 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env before deploying to production}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env before deploying to production}
 
-  mediamtx:
-    # Only HLS needs to be reachable, and only through Caddy. The control API
-    # (9997) has no auth of its own, so it stays internal-only in production.
-    ports: !reset []
-
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
