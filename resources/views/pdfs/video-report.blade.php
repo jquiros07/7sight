@@ -18,6 +18,18 @@
         'REVIEW' => '#92400e',
         'UNSAFE' => '#991b1b',
     ];
+
+    $aiContentVerdictColors = [
+        'AI_GENERATED' => '#991b1b',
+        'AUTHENTIC' => '#166534',
+        'INCONCLUSIVE' => '#52525b',
+    ];
+
+    $aiContentVerdictLabels = [
+        'AI_GENERATED' => 'Likely AI-generated',
+        'AUTHENTIC' => 'Likely authentic',
+        'INCONCLUSIVE' => 'Inconclusive',
+    ];
 @endphp
 <!doctype html>
 <html>
@@ -228,6 +240,35 @@
                         <ul>
                             @foreach ($assessment['suggestions'] as $suggestion)
                                 <li>{{ $suggestion }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+            </div>
+        @endif
+
+        @if ($insights->ai_content_assessment)
+            @php
+                $assessment = $insights->ai_content_assessment;
+            @endphp
+            <div class="insight-block">
+                <h3>
+                    AI generated content detection
+                    <span class="badge" style="background: {{ $aiContentVerdictColors[$assessment['verdict']] ?? '#52525b' }}">
+                        {{ $aiContentVerdictLabels[$assessment['verdict']] ?? $assessment['verdict'] }}
+                    </span>
+                </h3>
+                <p class="muted">
+                    {{ $assessment['confidence'] }}% confidence
+                    · clip {{ \App\Support\ReportFormatter::seconds($assessment['start_seconds']) }}–{{ \App\Support\ReportFormatter::seconds($assessment['end_seconds']) }}
+                </p>
+                <p>{{ $assessment['reasoning'] }}</p>
+
+                @if (! empty($assessment['indicators']))
+                    <div class="observations">
+                        <ul>
+                            @foreach ($assessment['indicators'] as $indicator)
+                                <li>{{ $indicator }}</li>
                             @endforeach
                         </ul>
                     </div>

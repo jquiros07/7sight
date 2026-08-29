@@ -2,7 +2,7 @@ import { FormEvent, memo, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { ApexOptions } from 'apexcharts';
 import { AppLayout } from '@/components/AppLayout';
-import { BarChart3, ChevronLeft, Download, Flag, FlagOff, HelpCircle, Lightbulb, Loader2, PlayCircle, Sparkles } from 'lucide-react';
+import { BarChart3, ChevronLeft, Download, Fingerprint, Flag, FlagOff, HelpCircle, Lightbulb, Loader2, PlayCircle, Sparkles } from 'lucide-react';
 import { buildTooltip, type IBuildTooltipHelperOptions, type IChartProps } from 'preline/helpers/apexcharts';
 import { varToColor } from 'preline/helpers/shared';
 import { api } from '../lib/api';
@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApexChart } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
+import { TrimScrubber } from '@/components/TrimScrubber';
 
 type AnalysisJobType = 'object_detection' | 'threat_detection' | 'content_moderation' | 'text_detection';
 type AnalysisJobStatus = 'pending' | 'processing' | 'completed' | 'failed';
@@ -54,6 +55,23 @@ type VideoDetail = {
     analysis_jobs: AnalysisJob[];
     latest_insight: VideoInsightsResponse | null;
     insights_failed_at: string | null;
+    latest_ai_content_analysis: AiContentAnalysis | null;
+};
+
+type AiContentAnalysisResult = {
+    verdict: 'AI_GENERATED' | 'AUTHENTIC' | 'INCONCLUSIVE';
+    confidence: number;
+    reasoning: string;
+    indicators: string[];
+};
+
+type AiContentAnalysis = {
+    id: number;
+    status: 'pending' | 'processing' | 'completed' | 'failed';
+    start_seconds: number;
+    end_seconds: number;
+    result: AiContentAnalysisResult | null;
+    error_message: string | null;
 };
 
 type DetectedObject = {
@@ -513,6 +531,149 @@ function ModerationAssessmentSection({
 
             <SuggestionsList suggestions={assessment.suggestions ?? []} />
         </div>
+    );
+}
+
+const AI_CONTENT_MAX_CLIP_SECONDS = 90;
+
+const AI_CONTENT_VERDICT_STYLES: Record<AiContentAnalysisResult['verdict'], string> = {
+    AI_GENERATED: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+    AUTHENTIC: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+    INCONCLUSIVE: 'bg-slate-100 text-slate-800 dark:bg-slate-500/20 dark:text-slate-400',
+};
+
+const AI_CONTENT_VERDICT_LABELS: Record<AiContentAnalysisResult['verdict'], string> = {
+    AI_GENERATED: 'Likely AI-generated',
+    AUTHENTIC: 'Likely authentic',
+    INCONCLUSIVE: 'Inconclusive',
+};
+
+function AiContentAnalysisCard({
+    videoId,
+    durationSeconds,
+    initialAnalysis,
+}: {
+    videoId: number;
+    durationSeconds: number | null;
+    initialAnalysis: AiContentAnalysis | null;
+}) {
+    const [start, setStart] = useState(0);
+    const [end, setEnd] = useState(Math.min(durationSeconds ?? 0, AI_CONTENT_MAX_CLIP_SECONDS));
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState<string[]>([]);
+    const [analysis, setAnalysis] = useState<AiContentAnalysis | null>(initialAnalysis);
+
+    useEffect(() => {
+        if (!analysis || analysis.status === 'completed' || analysis.status === 'failed') return;
+
+        const interval = setInterval(async () => {
+            try {
+                const res = await api.get<AiContentAnalysis>(`/api/videos/${videoId}/ai-content-analyses/${analysis.id}`);
+                setAnalysis(res.data);
+            } catch {
+                // Transient network hiccup - just skip this tick and retry on the next one.
+            }
+        }, 3000);
+
+        return () => clearInterval(interval);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [videoId, analysis?.id, analysis?.status]);
+
+    async function handleSubmit() {
+        setSubmitting(true);
+        setError([]);
+        try {
+            const res = await api.post<AiContentAnalysis>(`/api/videos/${videoId}/ai-content-analysis`, {
+                start_seconds: Math.round(start),
+                end_seconds: Math.round(end),
+            });
+            setAnalysis(res.data);
+        } catch (err) {
+            setError(getErrorMessages(err));
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
+    const isRunning = analysis?.status === 'pending' || analysis?.status === 'processing';
+    const rangeTooLong = end - start > AI_CONTENT_MAX_CLIP_SECONDS;
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                    <Fingerprint className="size-4" strokeWidth={1.75} />
+                    AI Generated Content Detection
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+                <p className="text-sm text-muted-foreground-1">
+                    Pick up to a 90-second clip for a forensic check on whether it looks AI-generated or manipulated.
+                </p>
+
+                {durationSeconds ? (
+                    <TrimScrubber
+                        durationSeconds={durationSeconds}
+                        start={start}
+                        end={end}
+                        onChange={(newStart, newEnd) => {
+                            setStart(newStart);
+                            setEnd(newEnd);
+                        }}
+                    />
+                ) : (
+                    <p className="text-xs text-muted-foreground-1">Duration unknown.</p>
+                )}
+
+                {rangeTooLong && <p className="text-xs text-destructive">The selected clip is longer than 90 seconds.</p>}
+
+                <Button
+                    variant="secondary"
+                    className="w-fit"
+                    onClick={handleSubmit}
+                    disabled={submitting || isRunning || rangeTooLong || !durationSeconds}
+                >
+                    {(submitting || isRunning) && <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />}
+                    {isRunning ? 'Analyzing…' : 'Run analysis'}
+                </Button>
+
+                {error.length > 0 && (
+                    <Alert variant="destructive" onDismiss={() => setError([])}>
+                        <AlertDescription>{error.join(' ')}</AlertDescription>
+                    </Alert>
+                )}
+
+                {analysis?.status === 'failed' && (
+                    <Alert variant="destructive">
+                        <AlertDescription>{analysis.error_message ?? 'The analysis failed.'}</AlertDescription>
+                    </Alert>
+                )}
+
+                {analysis?.status === 'completed' && analysis.result && (
+                    <div className="flex flex-col gap-2 rounded-lg border border-card-line p-4">
+                        <div className="flex items-center gap-2">
+                            <span
+                                className={cn(
+                                    'rounded-full px-2.5 py-0.5 text-xs font-medium',
+                                    AI_CONTENT_VERDICT_STYLES[analysis.result.verdict],
+                                )}
+                            >
+                                {AI_CONTENT_VERDICT_LABELS[analysis.result.verdict]}
+                            </span>
+                            <span className="text-xs text-muted-foreground-1">{analysis.result.confidence}% confidence</span>
+                        </div>
+                        <p className="text-sm text-foreground">{analysis.result.reasoning}</p>
+                        {analysis.result.indicators.length > 0 && (
+                            <ul className="list-disc space-y-1 pl-4 text-sm text-muted-foreground-1">
+                                {analysis.result.indicators.map((indicator) => (
+                                    <li key={indicator}>{indicator}</li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
     );
 }
 
@@ -1212,6 +1373,27 @@ export default function VideoResults() {
                                     availableTypes={latestJobsByType.filter((job) => job.status === 'completed').map((job) => job.type)}
                                     canInquire={can(video.workspace_id, 'videos.inquire')}
                                     onSeek={seekTo}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {can(video.workspace_id, 'videos.detect-ai-content') && (
+                        <div className="mt-6">
+                            <div className="flex items-center gap-2 border-b border-layer-line pb-3">
+                                <Fingerprint className="size-5 text-primary" strokeWidth={1.75} />
+                                <div>
+                                    <h2 className="font-heading text-xl font-medium text-foreground">Content authenticity</h2>
+                                    <p className="text-sm text-muted-foreground-1">
+                                        Send a clip of this video directly to an AI model for a forensic check
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="mt-4">
+                                <AiContentAnalysisCard
+                                    videoId={video.id}
+                                    durationSeconds={video.duration_seconds}
+                                    initialAnalysis={video.latest_ai_content_analysis}
                                 />
                             </div>
                         </div>

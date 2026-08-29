@@ -8,6 +8,7 @@ use App\Models\AnalysisJob;
 use App\Models\User;
 use App\Models\Video;
 use App\Models\VideoInsight;
+use App\Models\VideoToolJob;
 use App\Models\Workspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -39,7 +40,9 @@ class GenerateDashboardReportTest extends TestCase
         VideoInsight::create([
             'video_id' => $video->id,
             'threat_assessment' => ['threat_detected' => true, 'risk_level' => 'HIGH'],
+            'ai_content_assessment' => ['verdict' => 'AI_GENERATED', 'confidence' => 85],
         ]);
+        VideoToolJob::factory()->create(['video_id' => $video->id]);
 
         $pdf = (app(GenerateDashboardReport::class))($member);
 

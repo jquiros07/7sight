@@ -8,6 +8,7 @@ import {
     Clock,
     Database,
     Download,
+    Fingerprint,
     Flag,
     Folder,
     Lightbulb,
@@ -17,6 +18,7 @@ import {
     Sparkles,
     Tag,
     Video,
+    Wrench,
     XCircle,
 } from 'lucide-react';
 import { cssVarToValue } from 'preline/helpers/apexcharts';
@@ -55,7 +57,7 @@ type SpotlightItem = {
     video_id: number;
     video_title: string;
     workspace_name: string;
-    type: 'threat' | 'moderation';
+    type: 'threat' | 'moderation' | 'ai_content';
     severity: string;
 };
 
@@ -86,23 +88,28 @@ type DashboardData = {
         stuck_processing_videos: number;
         total_inquiries: number;
         flagged_for_review: number;
+        tool_jobs_run: number;
     };
     uploads_over_time: { date: string; count: number }[];
     safety_spotlight: {
         threats_detected: number;
         flagged_moderation: number;
+        ai_content_flagged: number;
         items: SpotlightItem[];
     };
     workspace_leaderboard: LeaderboardWorkspace[];
     recent_activity: ActivityVideo[];
     top_labels: { label: string; occurrences: number }[];
     needs_review: NeedsReviewItem[];
+    suggestions: Suggestion[];
 };
+
+type SuggestionType = 'failed_videos' | 'stuck_processing' | 'safety_flagged' | 'safety_clear' | 'needs_review' | 'processing' | 'no_uploads';
 
 type SuggestionTone = 'warning' | 'success' | 'info';
 
 type Suggestion = {
-    icon: ReactNode;
+    type: SuggestionType;
     tone: SuggestionTone;
     text: string;
 };
@@ -113,6 +120,16 @@ const SUGGESTION_TONE_STYLES: Record<SuggestionTone, string> = {
     info: 'bg-primary/10 text-primary',
 };
 
+const SUGGESTION_ICONS: Record<SuggestionType, typeof XCircle> = {
+    failed_videos: XCircle,
+    stuck_processing: AlertTriangle,
+    safety_flagged: ShieldAlert,
+    safety_clear: CheckCircle2,
+    needs_review: Flag,
+    processing: Loader2,
+    no_uploads: Clock,
+};
+
 const SEVERITY_STYLES: Record<string, string> = {
     CRITICAL: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
     HIGH: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
@@ -121,81 +138,13 @@ const SEVERITY_STYLES: Record<string, string> = {
     NONE: 'bg-slate-100 text-slate-800 dark:bg-slate-500/20 dark:text-slate-400',
 };
 
-// Small deterministic tips derived from stats already in the dashboard
-// payload - no extra AI call, so this is always available and instant.
-function computeSuggestions(dashboard: DashboardData): Suggestion[] {
-    if (dashboard.stats.total_videos === 0) return [];
-
-    const suggestions: Suggestion[] = [];
-
-    if (dashboard.stats.failed_videos > 0) {
-        const n = dashboard.stats.failed_videos;
-        suggestions.push({
-            icon: <XCircle className="size-4" strokeWidth={1.75} />,
-            tone: 'warning',
-            text: `${n} video${n === 1 ? '' : 's'} failed analysis — review and retry ${n === 1 ? 'it' : 'them'}.`,
-        });
-    }
-
-    if (dashboard.stats.stuck_processing_videos > 0) {
-        const n = dashboard.stats.stuck_processing_videos;
-        suggestions.push({
-            icon: <AlertTriangle className="size-4" strokeWidth={1.75} />,
-            tone: 'warning',
-            text: `${n} video${n === 1 ? '' : 's'} stuck processing for over 30 minutes — may need a retry.`,
-        });
-    }
-
-    const flagged = dashboard.safety_spotlight.threats_detected + dashboard.safety_spotlight.flagged_moderation;
-    if (flagged > 0) {
-        suggestions.push({
-            icon: <ShieldAlert className="size-4" strokeWidth={1.75} />,
-            tone: 'warning',
-            text: `${flagged} video${flagged === 1 ? '' : 's'} flagged for safety — see the spotlight.`,
-        });
-    } else {
-        suggestions.push({
-            icon: <CheckCircle2 className="size-4" strokeWidth={1.75} />,
-            tone: 'success',
-            text: 'No safety flags across your workspaces — all clear.',
-        });
-    }
-
-    if (dashboard.stats.flagged_for_review > 0) {
-        const n = dashboard.stats.flagged_for_review;
-        suggestions.push({
-            icon: <Flag className="size-4" strokeWidth={1.75} />,
-            tone: 'warning',
-            text: `${n} analysis result${n === 1 ? '' : 's'} flagged for human review — see Needs review.`,
-        });
-    }
-
-    if (dashboard.stats.processing_videos > 0) {
-        const n = dashboard.stats.processing_videos;
-        suggestions.push({
-            icon: <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />,
-            tone: 'info',
-            text: `${n} video${n === 1 ? '' : 's'} currently being analyzed.`,
-        });
-    }
-
-    const recentUploads = dashboard.uploads_over_time.reduce((sum, day) => sum + day.count, 0);
-    if (recentUploads === 0) {
-        suggestions.push({
-            icon: <Clock className="size-4" strokeWidth={1.75} />,
-            tone: 'info',
-            text: 'No uploads in the past 14 days.',
-        });
-    }
-
-    return suggestions;
-}
-
 function SuggestionBox({ suggestion }: { suggestion: Suggestion }) {
+    const Icon = SUGGESTION_ICONS[suggestion.type];
+
     return (
         <div className="flex items-start gap-2.5 rounded-lg bg-layer p-3">
             <div className={cn('flex size-7 shrink-0 items-center justify-center rounded-lg', SUGGESTION_TONE_STYLES[suggestion.tone])}>
-                {suggestion.icon}
+                <Icon className={cn('size-4', suggestion.type === 'processing' && 'animate-spin')} strokeWidth={1.75} />
             </div>
             <p className="text-sm text-foreground">{suggestion.text}</p>
         </div>
@@ -221,8 +170,20 @@ function StatCell({ icon, label, value, tone = 'default' }: { icon: ReactNode; l
     );
 }
 
+const SPOTLIGHT_ICONS: Record<SpotlightItem['type'], typeof ShieldAlert> = {
+    threat: ShieldAlert,
+    moderation: ShieldQuestion,
+    ai_content: Fingerprint,
+};
+
+const SPOTLIGHT_LABELS: Record<SpotlightItem['type'], string> = {
+    threat: 'Threat detected',
+    moderation: 'Moderation flag',
+    ai_content: 'AI-generated content',
+};
+
 function SpotlightRow({ item, onClick }: { item: SpotlightItem; onClick: () => void }) {
-    const Icon = item.type === 'threat' ? ShieldAlert : ShieldQuestion;
+    const Icon = SPOTLIGHT_ICONS[item.type];
 
     return (
         <button onClick={onClick} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-layer">
@@ -232,7 +193,7 @@ function SpotlightRow({ item, onClick }: { item: SpotlightItem; onClick: () => v
             <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">{item.video_title}</p>
                 <p className="truncate text-xs text-muted-foreground-1">
-                    {item.workspace_name} · {item.type === 'threat' ? 'Threat detected' : 'Moderation flag'}
+                    {item.workspace_name} · {SPOTLIGHT_LABELS[item.type]}
                 </p>
             </div>
             <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', SEVERITY_STYLES[item.severity] ?? SEVERITY_STYLES.LOW)}>
@@ -350,7 +311,7 @@ export default function Dashboard() {
         tooltip: { theme: 'dark' },
     };
 
-    const suggestions = dashboard ? computeSuggestions(dashboard) : [];
+    const suggestions = dashboard?.suggestions ?? [];
 
     return (
         <AppLayout active="dashboard">
@@ -433,6 +394,17 @@ export default function Dashboard() {
                         />
                     </Card>
 
+                    {/* Kept separate from the 6-stat grid above rather than added as a 7th
+                        cell, so that grid's even-division math (see its own comment) stays
+                        accurate instead of silently going stale. */}
+                    <Card className="mt-4 grid grid-cols-1 gap-px overflow-hidden bg-card-line sm:max-w-xs">
+                        <StatCell
+                            icon={<Wrench className="size-5" strokeWidth={1.75} />}
+                            label="Tool jobs run"
+                            value={String(dashboard.stats.tool_jobs_run)}
+                        />
+                    </Card>
+
                     {/* Suggestions + safety spotlight + needs review, side by side */}
                     <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
                         <Card>
@@ -459,16 +431,18 @@ export default function Dashboard() {
                                     Safety spotlight
                                 </CardTitle>
                                 <CardDescription>
-                                    {dashboard.safety_spotlight.threats_detected + dashboard.safety_spotlight.flagged_moderation > 0
-                                        ? `${dashboard.safety_spotlight.threats_detected} threat${dashboard.safety_spotlight.threats_detected === 1 ? '' : 's'} · ${dashboard.safety_spotlight.flagged_moderation} moderation flag${dashboard.safety_spotlight.flagged_moderation === 1 ? '' : 's'}, across all workspaces`
-                                        : 'Videos worth a human look, across all workspaces'}
+                                    {dashboard.safety_spotlight.threats_detected} threat
+                                    {dashboard.safety_spotlight.threats_detected === 1 ? '' : 's'} ·{' '}
+                                    {dashboard.safety_spotlight.flagged_moderation} moderation flag
+                                    {dashboard.safety_spotlight.flagged_moderation === 1 ? '' : 's'} ·{' '}
+                                    {dashboard.safety_spotlight.ai_content_flagged} AI-generated, across all workspaces
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="flex flex-col gap-1 pt-0">
                                 {dashboard.safety_spotlight.items.length === 0 ? (
                                     <div className="flex flex-col items-center gap-2 py-8 text-center">
                                         <CheckCircle2 className="size-6 text-green-600 dark:text-green-400" strokeWidth={1.75} />
-                                        <p className="text-sm text-muted-foreground-1">No threats or moderation flags right now.</p>
+                                        <p className="text-sm text-muted-foreground-1">No safety flags right now.</p>
                                     </div>
                                 ) : (
                                     dashboard.safety_spotlight.items.map((item) => (
@@ -489,9 +463,9 @@ export default function Dashboard() {
                                     Needs review
                                 </CardTitle>
                                 <CardDescription>
-                                    {dashboard.stats.flagged_for_review > 0
-                                        ? `${dashboard.stats.flagged_for_review} result${dashboard.stats.flagged_for_review === 1 ? '' : 's'} flagged by your team, across all workspaces`
-                                        : 'Analysis results your team flagged as inaccurate'}
+                                    {dashboard.stats.flagged_for_review} result
+                                    {dashboard.stats.flagged_for_review === 1 ? '' : 's'} flagged by your team, across all
+                                    workspaces
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="flex flex-col gap-1 pt-0">

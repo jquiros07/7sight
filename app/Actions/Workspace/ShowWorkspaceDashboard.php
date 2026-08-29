@@ -9,6 +9,7 @@ use App\Models\AnalysisJob;
 use App\Models\User;
 use App\Models\Video;
 use App\Models\VideoInsight;
+use App\Models\VideoToolJob;
 use App\Models\Workspace;
 use Illuminate\Support\Collection;
 
@@ -38,7 +39,7 @@ class ShowWorkspaceDashboard
                 'analysisJobs:id,video_id,type,status,started_at,completed_at,flagged_for_review_at,flagged_by,flagged_review_note',
                 'analysisJobs.results:id,analysis_job_id,label,occurrences',
                 'analysisJobs.flaggedByUser:id,name',
-                'insights:id,video_id,threat_assessment,moderation,created_at',
+                'insights:id,video_id,threat_assessment,moderation,ai_content_assessment,created_at',
             ])
             ->get();
         $jobs = $videos->flatMap->analysisJobs;
@@ -62,6 +63,7 @@ class ShowWorkspaceDashboard
                 'failed_jobs' => $jobs->where('status', 'failed')->count(),
                 'flagged_for_review' => $jobs->whereNotNull('flagged_for_review_at')->count(),
                 'avg_processing_seconds' => $this->avgProcessingSeconds($jobs),
+                'tool_jobs_run' => VideoToolJob::whereIn('video_id', $videos->pluck('id'))->count(),
             ],
             'uploads_over_time' => $this->uploadsOverTime($videos),
             'videos_by_status' => $this->countsByValues(
@@ -164,16 +166,18 @@ class ShowWorkspaceDashboard
      * non-null value rather than only the single latest row.
      *
      * @param  Collection<int, Video>  $videos
-     * @return array{threats_detected: int, flagged_moderation: int}
+     * @return array{threats_detected: int, flagged_moderation: int, ai_generated_content_flagged: int}
      */
     private function insightFlags(Collection $videos): array
     {
         $threatsDetected = 0;
         $flaggedModeration = 0;
+        $aiGeneratedContentFlagged = 0;
 
         foreach ($videos as $video) {
             $latestThreat = $video->insights->whereNotNull('threat_assessment')->sortByDesc('created_at')->first();
             $latestModeration = $video->insights->whereNotNull('moderation')->sortByDesc('created_at')->first();
+            $latestAiContent = $video->insights->whereNotNull('ai_content_assessment')->sortByDesc('created_at')->first();
 
             if ($latestThreat && ($latestThreat->threat_assessment['threat_detected'] ?? false)) {
                 $threatsDetected++;
@@ -182,11 +186,16 @@ class ShowWorkspaceDashboard
             if ($latestModeration && ($latestModeration->moderation['status'] ?? 'SAFE') !== 'SAFE') {
                 $flaggedModeration++;
             }
+
+            if ($latestAiContent && ($latestAiContent->ai_content_assessment['verdict'] ?? null) === 'AI_GENERATED') {
+                $aiGeneratedContentFlagged++;
+            }
         }
 
         return [
             'threats_detected' => $threatsDetected,
             'flagged_moderation' => $flaggedModeration,
+            'ai_generated_content_flagged' => $aiGeneratedContentFlagged,
         ];
     }
 

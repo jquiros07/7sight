@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
-import { ChevronLeft, ChevronRight, Eye, Loader2, Pencil, Plus, Search, SlidersHorizontal, Sparkles, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, Loader2, Pencil, Plus, Search, SlidersHorizontal, Sparkles, Trash2, Wrench, X } from 'lucide-react';
 import { HSOverlay } from 'preline';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -490,6 +490,13 @@ export default function Videos() {
                                                         label="View results"
                                                         ariaLabel={`View results for ${video.title}`}
                                                         onClick={() => navigate(`/videos/${video.id}/results`)}
+                                                        hoverClassName="hover:text-primary"
+                                                    />
+                                                    <ActionButton
+                                                        icon={<Wrench className="size-4" strokeWidth={1.75} />}
+                                                        label="Tools"
+                                                        ariaLabel={`Video tools for ${video.title}`}
+                                                        onClick={() => navigate(`/videos/${video.id}/tools`)}
                                                         hoverClassName="hover:text-primary"
                                                     />
                                                     {canEdit && (

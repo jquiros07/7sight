@@ -12,6 +12,7 @@ const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const VideoEdit = lazy(() => import('./pages/VideoEdit'));
 const VideoResults = lazy(() => import('./pages/VideoResults'));
 const VideoSearch = lazy(() => import('./pages/VideoSearch'));
+const VideoTools = lazy(() => import('./pages/VideoTools'));
 const VideoUpload = lazy(() => import('./pages/VideoUpload'));
 const Videos = lazy(() => import('./pages/Videos'));
 const WorkspaceCreate = lazy(() => import('./pages/WorkspaceCreate'));
@@ -86,6 +87,14 @@ export default function Router() {
                     element={
                         <RequireAuth>
                             <VideoResults />
+                        </RequireAuth>
+                    }
+                />
+                <Route
+                    path="/videos/:id/tools"
+                    element={
+                        <RequireAuth>
+                            <VideoTools />
                         </RequireAuth>
                     }
                 />

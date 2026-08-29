@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'threat_assessment',
     'moderation',
     'text_detection',
+    'ai_content_assessment',
     'embedding',
 ])]
 class VideoInsight extends Model
@@ -27,6 +28,7 @@ class VideoInsight extends Model
             'threat_assessment' => 'array',
             'moderation' => 'array',
             'text_detection' => 'array',
+            'ai_content_assessment' => 'array',
             'embedding' => 'array',
         ];
     }
@@ -42,6 +44,7 @@ class VideoInsight extends Model
             'threat_assessment' => $this->threat_assessment,
             'moderation' => $this->moderation,
             'text_detection' => $this->text_detection,
+            'ai_content_assessment' => $this->ai_content_assessment,
         ])
             ->filter()
             ->map(fn (array $value, string $field) => "{$field}: ".json_encode($value))

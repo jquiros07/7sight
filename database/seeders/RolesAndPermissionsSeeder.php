@@ -14,6 +14,8 @@ class RolesAndPermissionsSeeder extends Seeder
         'videos.generate-report', 'videos.list-inquiries',
         'videos.update', 'videos.delete',
         'videos.analyze', 'videos.generate-insights', 'videos.inquire',
+        'videos.generate-thumbnail', 'videos.extract-audio', 'videos.trim', 'videos.resize',
+        'videos.detect-ai-content',
     ];
 
     /**
@@ -27,6 +29,7 @@ class RolesAndPermissionsSeeder extends Seeder
         'workspace.update',
         'videos.analyze', 'videos.generate-insights', 'videos.inquire',
         'videos.update', 'videos.delete',
+        'videos.detect-ai-content',
     ];
 
     /** Withheld from 'admin' relative to 'owner'. */

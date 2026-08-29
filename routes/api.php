@@ -40,6 +40,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/videos/{video}/inquiries', [VideoController::class, 'inquire'])->middleware('throttle:10,1');
     Route::post('/videos/{video}/analysis-jobs/{analysisJob}/flag', [VideoController::class, 'flagAnalysisJob'])->middleware('throttle:20,1');
     Route::delete('/videos/{video}/analysis-jobs/{analysisJob}/flag', [VideoController::class, 'unflagAnalysisJob']);
+    Route::post('/videos/{video}/thumbnail', [VideoController::class, 'generateThumbnail'])->middleware('throttle:10,1');
+    Route::get('/videos/{video}/thumbnail', [VideoController::class, 'showThumbnail']);
+    Route::post('/videos/{video}/extract-audio', [VideoController::class, 'extractAudio'])->middleware('throttle:5,1');
+    Route::post('/videos/{video}/trim', [VideoController::class, 'trim'])->middleware('throttle:5,1');
+    Route::post('/videos/{video}/resize', [VideoController::class, 'resize'])->middleware('throttle:5,1');
+    Route::get('/videos/{video}/tool-jobs/{videoToolJob}', [VideoController::class, 'showToolJob']);
+    Route::get('/videos/{video}/tool-jobs/{videoToolJob}/download', [VideoController::class, 'downloadToolJob']);
+    Route::post('/videos/{video}/ai-content-analysis', [VideoController::class, 'requestAiContentAnalysis'])->middleware('throttle:5,1');
+    Route::get('/videos/{video}/ai-content-analyses/{aiContentAnalysis}', [VideoController::class, 'showAiContentAnalysis']);
     Route::get('/object-detection-categories', [ObjectDetectionCategoryController::class, 'index']);
 });
 

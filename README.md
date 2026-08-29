@@ -123,10 +123,46 @@ generation still fails after exhausting retries, the results page shows the
 failure plainly with a one-click retry, rather than leaving the page stuck on
 "not ready yet" indefinitely.
 
+**Video tools** — ffmpeg-backed utilities available for any uploaded video,
+from a dedicated Tools page (`/videos/{id}/tools`, styled like the analysis
+results page, with the video player alongside):
+- **Thumbnail** — generate a frame from the video and view/download it.
+- **Extract audio** — pull the audio track out as a downloadable MP3.
+- **Trim** — cut the video to a start/end range picked via a draggable
+  dual-handle timeline scrubber (or typed seconds directly), runs as a
+  background job, downloadable once complete.
+- **Resize / transcode** — re-encode to a target resolution (up to
+  3840×2160), same background-job/download flow as trim.
+
+Trim and resize run as queued jobs (`TrimVideoJob`/`ResizeVideoJob`,
+tracked in `video_tool_jobs`) since they can take a while on longer footage;
+thumbnail and extract-audio are fast enough to run synchronously. All four
+are permission-gated per workspace (`videos.generate-thumbnail`,
+`videos.extract-audio`, `videos.trim`, `videos.resize`).
+
+**AI Generated Content Detection** — a "Content authenticity" check on the
+video results page: pick up to a 90-second clip via the same draggable
+timeline scrubber Video Tools uses, and send it directly to Gemini as a video
+attachment (not pre-extracted data — every other agent in this app only ever
+sees data derived from the video, this is the one exception). Gemini reviews
+the clip itself for signs of AI generation/manipulation (temporal artifacts,
+unnatural motion, lighting/audio-sync inconsistencies) and returns a verdict
+(AI-generated / authentic / inconclusive) with a confidence score, reasoning,
+and specific indicators. Runs as a queued job (`AnalyzeAiGeneratedContentJob`)
+since a video-attachment call is heavier than a text-only one — the clip is
+downscaled first if needed to stay within the provider's inline attachment
+size limit. Cost-driving (admin/owner only, `videos.detect-ai-content`), and
+every finding feeds into that video's insights (searchable via AI Search,
+included in the PDF report) and both dashboards' safety spotlight.
+
 **Report export** — download a PDF summary of a video's analysis results and
-AI insights (overview, per-label bar charts, threat/moderation assessments,
-suggestions) directly from the results page, rendered server-side via headless
-Chrome.
+AI insights (overview, per-label bar charts, threat/moderation/AI-content
+assessments, suggestions) directly from the results page, rendered
+server-side via headless Chrome. The workspace and account dashboards each
+have their own "Download PDF" too, rendering the exact same stats, sections,
+and section order as the live dashboard — deliberately kept in lockstep
+(shared backend computations, not duplicated per-view logic) so the two never
+drift apart.
 
 **AI Search** — free-text, natural-language search across every analyzed
 video in a user's workspaces at once. Not a keyword filter: a single AI call
@@ -152,12 +188,16 @@ analyzed videos with notable highlights (manually triggered via a
 Generate/Refresh button rather than regenerated on every page load, so
 viewing the dashboard never costs an AI call), video/storage/analysis stat
 cards, a 14-day upload activity chart, a videos-by-status breakdown,
-analysis jobs by type, the top detected labels across the workspace, and
-threat/moderation flag counts sourced from generated AI insights.
+analysis jobs by type, the top detected labels across the workspace, threat/
+moderation/AI-generated-content flag counts sourced from generated AI
+insights, and a tool-jobs-run count (trims + resizes).
 
 **Account dashboard** — a cross-workspace overview: account-wide totals
-(including total Inquire questions asked), a safety spotlight surfacing the
-videos most worth a human's attention (ranked by risk/severity across every
+(including total Inquire questions asked and tool jobs run), a deterministic
+suggestions list (failed/stuck videos, safety flags, pending reviews — derived
+from stats already on the page, no extra AI call), a safety spotlight
+surfacing the videos most worth a human's attention (threats, moderation
+flags, and AI-generated-content findings, ranked by severity across every
 workspace), a per-workspace leaderboard, and a recent cross-workspace activity
 feed.
 
@@ -179,12 +219,13 @@ attempts, error messages) queryable without a separate dashboard.
 - [Laravel 13](https://laravel.com) (PHP 8.3+) — Action-per-operation pattern, thin controllers
 - [Laravel Fortify](https://laravel.com/docs/fortify) — authentication (registration, email verification, password reset)
 - [Laravel Sanctum](https://laravel.com/docs/sanctum) — API auth for the SPA
-- [laravel/ai](https://github.com/laravel/ai) + Google Gemini — six structured-output agents: one per analysis type, plus cross-video Search and per-video Inquire
+- [laravel/ai](https://github.com/laravel/ai) + Google Gemini — seven structured-output agents: one per analysis type, cross-video Search, per-video Inquire, and AI Generated Content Detection (the one agent given the video itself as an attachment, not derived data)
 - [Spatie Laravel Permission](https://spatie.be/docs/laravel-permission) — per-workspace roles/permissions (teams feature), enforced across every Action
 - MySQL 8.4
 - Redis 7 — two independent uses: the Redis Stream (+ consumer group) that hands analysis jobs to the Python worker, and Laravel's own queue (`queue:work`, run via Supervisor) for insight generation
 - [Spatie Laravel PDF](https://github.com/spatie/laravel-pdf) + Browsershot (headless Chrome) — video report export
 - [getID3](https://github.com/JamesHeinrich/getID3) — video metadata inspection on upload
+- [php-ffmpeg](https://github.com/PHP-FFMpeg/PHP-FFMpeg) + the `ffmpeg`/`ffprobe` binaries (installed in the `app` image) — Video Tools (thumbnail, trim, extract audio, resize/transcode)
 - [Sentry](https://sentry.io) — error tracking + performance tracing (Queues dashboard, distributed traces)
 
 **Frontend**

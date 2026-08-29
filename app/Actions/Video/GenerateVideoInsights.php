@@ -98,6 +98,12 @@ class GenerateVideoInsights
         $insight = VideoInsight::create([
             'video_id' => $video->id,
             'user_id' => $user->id,
+            // Carried forward rather than recomputed - this action never
+            // touches AI-generated-content findings (a separate,
+            // independently-triggered analysis), so without this a
+            // Rekognition-driven regeneration would blank out an existing
+            // finding just by creating a newer row.
+            'ai_content_assessment' => $video->latestInsight?->ai_content_assessment,
             ...$result,
         ]);
 

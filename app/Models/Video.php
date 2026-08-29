@@ -85,4 +85,14 @@ class Video extends Model
     {
         return $this->hasMany(VideoInquiry::class);
     }
+
+    public function aiContentAnalyses(): HasMany
+    {
+        return $this->hasMany(AiContentAnalysis::class);
+    }
+
+    public function latestAiContentAnalysis(): HasOne
+    {
+        return $this->hasOne(AiContentAnalysis::class)->latestOfMany();
+    }
 }

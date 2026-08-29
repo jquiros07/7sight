@@ -8,12 +8,14 @@ import {
     Clock,
     Database,
     Download,
+    Fingerprint,
     Flag,
     Loader2,
     ShieldAlert,
     ShieldQuestion,
     Sparkles,
     Video,
+    Wrench,
     XCircle,
 } from 'lucide-react';
 import { cssVarToValue } from 'preline/helpers/apexcharts';
@@ -60,12 +62,13 @@ type WorkspaceDashboardData = {
         failed_jobs: number;
         flagged_for_review: number;
         avg_processing_seconds: number | null;
+        tool_jobs_run: number;
     };
     uploads_over_time: { date: string; count: number }[];
     videos_by_status: { uploaded: number; processing: number; ready: number; failed: number };
     jobs_by_type: { object_detection: number; threat_detection: number; content_moderation: number; text_detection: number };
     top_labels: { label: string; occurrences: number }[];
-    insight_flags: { threats_detected: number; flagged_moderation: number };
+    insight_flags: { threats_detected: number; flagged_moderation: number; ai_generated_content_flagged: number };
     risk_level_breakdown: { LOW: number; MEDIUM: number; HIGH: number; CRITICAL: number };
     moderation_severity_breakdown: { NONE: number; LOW: number; MEDIUM: number; HIGH: number };
     needs_review: NeedsReviewItem[];
@@ -344,7 +347,7 @@ export default function WorkspaceDashboard() {
                         />
                     </div>
 
-                    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-4">
                         <StatCard
                             icon={<ShieldAlert className="size-5" strokeWidth={1.75} />}
                             label="Threats detected"
@@ -358,6 +361,13 @@ export default function WorkspaceDashboard() {
                             value={dashboard.insight_flags.flagged_moderation}
                             caption="from generated AI insights"
                             tone={dashboard.insight_flags.flagged_moderation > 0 ? 'warning' : 'default'}
+                        />
+                        <StatCard
+                            icon={<Fingerprint className="size-5" strokeWidth={1.75} />}
+                            label="AI-generated content"
+                            value={dashboard.insight_flags.ai_generated_content_flagged}
+                            caption="flagged videos"
+                            tone={dashboard.insight_flags.ai_generated_content_flagged > 0 ? 'warning' : 'default'}
                         />
                         <StatCard
                             icon={<Flag className="size-5" strokeWidth={1.75} />}
@@ -391,7 +401,7 @@ export default function WorkspaceDashboard() {
                         </CardContent>
                     </Card>
 
-                    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
                         <StatCard
                             icon={<XCircle className="size-5" strokeWidth={1.75} />}
                             label="Failed jobs"
@@ -403,6 +413,12 @@ export default function WorkspaceDashboard() {
                             label="Avg. processing time"
                             value={formatDurationShort(dashboard.stats.avg_processing_seconds)}
                             caption="per completed job"
+                        />
+                        <StatCard
+                            icon={<Wrench className="size-5" strokeWidth={1.75} />}
+                            label="Tool jobs run"
+                            value={dashboard.stats.tool_jobs_run}
+                            caption="trims + resizes"
                         />
                     </div>
 

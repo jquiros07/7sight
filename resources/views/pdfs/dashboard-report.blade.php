@@ -5,6 +5,12 @@
         'content_moderation' => 'Content moderation',
         'text_detection' => 'Text detection',
     ];
+
+    $spotlightTypeLabels = [
+        'threat' => 'Threat detected',
+        'moderation' => 'Moderation flag',
+        'ai_content' => 'AI-generated content',
+    ];
 @endphp
 <!doctype html>
 <html>
@@ -31,16 +37,29 @@
         <tr><td>Total videos</td><td>{{ $dashboard['stats']['total_videos'] }}</td></tr>
         <tr><td>Storage used</td><td>{{ \App\Support\ReportFormatter::fileSize($dashboard['stats']['total_storage_bytes']) }}</td></tr>
         <tr><td>Processing now</td><td>{{ $dashboard['stats']['processing_videos'] }}</td></tr>
-        <tr><td>Stuck processing (30+ min)</td><td>{{ $dashboard['stats']['stuck_processing_videos'] }}</td></tr>
         <tr><td>Failed videos</td><td>{{ $dashboard['stats']['failed_videos'] }}</td></tr>
         <tr><td>Inquiries asked</td><td>{{ $dashboard['stats']['total_inquiries'] }}</td></tr>
-        <tr><td>Needs review</td><td>{{ $dashboard['stats']['flagged_for_review'] }}</td></tr>
     </table>
+
+    <h2>Tool jobs run</h2>
+    <p class="muted">{{ $dashboard['stats']['tool_jobs_run'] }}</p>
+
+    <h2>Suggestions</h2>
+    @if (! empty($dashboard['suggestions']))
+        <ul>
+            @foreach ($dashboard['suggestions'] as $suggestion)
+                <li>{{ $suggestion['text'] }}</li>
+            @endforeach
+        </ul>
+    @else
+        <p class="muted">Nothing to flag right now.</p>
+    @endif
 
     <h2>Safety spotlight</h2>
     <p class="muted">
         {{ $dashboard['safety_spotlight']['threats_detected'] }} threat(s) ·
-        {{ $dashboard['safety_spotlight']['flagged_moderation'] }} moderation flag(s), across all workspaces
+        {{ $dashboard['safety_spotlight']['flagged_moderation'] }} moderation flag(s) ·
+        {{ $dashboard['safety_spotlight']['ai_content_flagged'] }} AI-generated, across all workspaces
     </p>
     @if (! empty($dashboard['safety_spotlight']['items']))
         <table>
@@ -52,17 +71,20 @@
                     <tr>
                         <td>{{ $item['video_title'] }}</td>
                         <td>{{ $item['workspace_name'] }}</td>
-                        <td>{{ $item['type'] === 'threat' ? 'Threat detected' : 'Moderation flag' }}</td>
+                        <td>{{ $spotlightTypeLabels[$item['type']] ?? $item['type'] }}</td>
                         <td>{{ $item['severity'] }}</td>
                     </tr>
                 @endforeach
             </tbody>
         </table>
     @else
-        <p class="muted">No threats or moderation flags right now.</p>
+        <p class="muted">No safety flags right now.</p>
     @endif
 
     <h2>Needs review</h2>
+    <p class="muted">
+        {{ $dashboard['stats']['flagged_for_review'] }} result{{ $dashboard['stats']['flagged_for_review'] === 1 ? '' : 's' }} flagged by your team, across all workspaces
+    </p>
     @if (! empty($dashboard['needs_review']))
         <table>
             <thead>

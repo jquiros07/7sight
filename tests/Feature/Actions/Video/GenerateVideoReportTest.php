@@ -6,6 +6,7 @@ use App\Actions\Video\GenerateVideoReport;
 use App\Models\AnalysisJob;
 use App\Models\User;
 use App\Models\Video;
+use App\Models\VideoInsight;
 use App\Models\Workspace;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -57,6 +58,37 @@ class GenerateVideoReportTest extends TestCase
             'flagged_for_review_at' => now(),
             'flagged_by' => $member->id,
             'flagged_review_note' => 'Missed a weapon at 1:32',
+        ]);
+
+        $pdf = (app(GenerateVideoReport::class))($member, $video);
+
+        $bytes = base64_decode($pdf->base64());
+
+        $this->assertNotEmpty($bytes);
+        $this->assertStringStartsWith('%PDF-', $bytes);
+    }
+
+    /**
+     * Renders a real PDF (see the note above) for a video with an
+     * AI-generated-content finding, to catch a Blade error in that block
+     * (e.g. an unhandled verdict key, or a missing start/end seconds field).
+     */
+    public function test_it_renders_an_ai_content_assessment_in_the_pdf(): void
+    {
+        $workspace = Workspace::factory()->create();
+        $member = User::factory()->create();
+        $this->assignWorkspaceRole($workspace, $member, 'member');
+        $video = Video::factory()->create(['workspace_id' => $workspace->id]);
+        VideoInsight::create([
+            'video_id' => $video->id,
+            'ai_content_assessment' => [
+                'verdict' => 'AI_GENERATED',
+                'confidence' => 88,
+                'reasoning' => 'Temporal artifacts observed around the hands.',
+                'indicators' => ['Unnatural motion blur'],
+                'start_seconds' => 5,
+                'end_seconds' => 35,
+            ],
         ]);
 
         $pdf = (app(GenerateVideoReport::class))($member, $video);

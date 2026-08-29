@@ -4,21 +4,32 @@ namespace App\Http\Controllers;
 
 use App\Actions\Video\AnalyzeVideo;
 use App\Actions\Video\DeleteVideo;
+use App\Actions\Video\DownloadVideoToolJobOutput;
+use App\Actions\Video\ExtractVideoAudio;
 use App\Actions\Video\FlagAnalysisJobForReview;
 use App\Actions\Video\GenerateVideoInsights;
 use App\Actions\Video\GenerateVideoReport;
+use App\Actions\Video\GenerateVideoThumbnail;
 use App\Actions\Video\InquireAboutVideo;
 use App\Actions\Video\ListVideoInquiries;
 use App\Actions\Video\ListVideos;
+use App\Actions\Video\RequestAiContentAnalysis;
+use App\Actions\Video\RequestVideoResize;
+use App\Actions\Video\RequestVideoTrim;
+use App\Actions\Video\ShowAiContentAnalysis;
 use App\Actions\Video\ShowVideo;
+use App\Actions\Video\ShowVideoThumbnail;
+use App\Actions\Video\ShowVideoToolJob;
 use App\Actions\Video\StreamVideo;
 use App\Actions\Video\UnflagAnalysisJobForReview;
 use App\Actions\Video\UpdateVideo;
 use App\Actions\Video\UploadVideo;
 use App\Enums\AnalysisType;
 use App\Jobs\GenerateVideoInsightsJob;
+use App\Models\AiContentAnalysis;
 use App\Models\AnalysisJob;
 use App\Models\Video;
+use App\Models\VideoToolJob;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -227,6 +238,138 @@ class VideoController extends Controller
     {
         try {
             return response()->json($unflagAnalysisJobForReview($request->user(), $video, $analysisJob));
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function generateThumbnail(Request $request, Video $video, GenerateVideoThumbnail $generateVideoThumbnail)
+    {
+        try {
+            return response()->json($generateVideoThumbnail($request->user(), $video));
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function showThumbnail(Request $request, Video $video, ShowVideoThumbnail $showVideoThumbnail)
+    {
+        try {
+            return $showVideoThumbnail($request->user(), $video);
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function extractAudio(Request $request, Video $video, ExtractVideoAudio $extractVideoAudio)
+    {
+        try {
+            return $extractVideoAudio($request->user(), $video);
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function trim(Request $request, Video $video, RequestVideoTrim $requestVideoTrim)
+    {
+        try {
+            return response()->json($requestVideoTrim($request->user(), $video, [
+                'start_seconds' => $request->start_seconds,
+                'end_seconds' => $request->end_seconds,
+            ]), 202);
+        } catch (ValidationException $e) {
+            return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], $e->status);
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function resize(Request $request, Video $video, RequestVideoResize $requestVideoResize)
+    {
+        try {
+            return response()->json($requestVideoResize($request->user(), $video, [
+                'width' => $request->width,
+                'height' => $request->height,
+            ]), 202);
+        } catch (ValidationException $e) {
+            return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], $e->status);
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function showToolJob(Request $request, Video $video, VideoToolJob $videoToolJob, ShowVideoToolJob $showVideoToolJob)
+    {
+        try {
+            return response()->json($showVideoToolJob($request->user(), $video, $videoToolJob));
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function downloadToolJob(Request $request, Video $video, VideoToolJob $videoToolJob, DownloadVideoToolJobOutput $downloadVideoToolJobOutput)
+    {
+        try {
+            return $downloadVideoToolJobOutput($request->user(), $video, $videoToolJob);
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function requestAiContentAnalysis(Request $request, Video $video, RequestAiContentAnalysis $requestAiContentAnalysis)
+    {
+        try {
+            return response()->json($requestAiContentAnalysis($request->user(), $video, [
+                'start_seconds' => $request->start_seconds,
+                'end_seconds' => $request->end_seconds,
+            ]), 202);
+        } catch (ValidationException $e) {
+            return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], $e->status);
+        } catch (HttpException $e) {
+            return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], 500);
+        }
+    }
+
+    public function showAiContentAnalysis(Request $request, Video $video, AiContentAnalysis $aiContentAnalysis, ShowAiContentAnalysis $showAiContentAnalysis)
+    {
+        try {
+            return response()->json($showAiContentAnalysis($request->user(), $video, $aiContentAnalysis));
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
         } catch (Throwable $e) {
