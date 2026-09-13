@@ -7,13 +7,13 @@ use App\Actions\Video\DeleteVideo;
 use App\Actions\Video\DownloadVideoToolJobOutput;
 use App\Actions\Video\ExtractVideoAudio;
 use App\Actions\Video\FlagAnalysisJobForReview;
-use App\Actions\Video\GenerateVideoInsights;
 use App\Actions\Video\GenerateVideoReport;
 use App\Actions\Video\GenerateVideoThumbnail;
 use App\Actions\Video\InquireAboutVideo;
 use App\Actions\Video\ListVideoInquiries;
 use App\Actions\Video\ListVideos;
 use App\Actions\Video\RequestAiContentAnalysis;
+use App\Actions\Video\RequestVideoInsights;
 use App\Actions\Video\RequestVideoResize;
 use App\Actions\Video\RequestVideoTrim;
 use App\Actions\Video\ShowAiContentAnalysis;
@@ -111,7 +111,7 @@ class VideoController extends Controller
         }
     }
 
-    public function insights(Request $request, Video $video, GenerateVideoInsights $generateVideoInsights)
+    public function insights(Request $request, Video $video, RequestVideoInsights $requestVideoInsights)
     {
         try {
             $validated = $request->validate([
@@ -125,7 +125,9 @@ class VideoController extends Controller
 
             $type = isset($validated['type']) ? AnalysisType::from($validated['type']) : null;
 
-            return response()->json($generateVideoInsights($request->user(), $video, $type));
+            $requestVideoInsights($request->user(), $video, $type);
+
+            return response()->json(['message' => 'Insight generation queued.'], 202);
         } catch (ValidationException $e) {
             return response()->json(['message' => $e->getMessage(), 'errors' => $e->errors()], $e->status);
         } catch (HttpException $e) {
@@ -250,7 +252,7 @@ class VideoController extends Controller
     public function generateThumbnail(Request $request, Video $video, GenerateVideoThumbnail $generateVideoThumbnail)
     {
         try {
-            return response()->json($generateVideoThumbnail($request->user(), $video));
+            return response()->json($generateVideoThumbnail($request->user(), $video), 202);
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
         } catch (Throwable $e) {
@@ -276,7 +278,7 @@ class VideoController extends Controller
     public function extractAudio(Request $request, Video $video, ExtractVideoAudio $extractVideoAudio)
     {
         try {
-            return $extractVideoAudio($request->user(), $video);
+            return response()->json($extractVideoAudio($request->user(), $video), 202);
         } catch (HttpException $e) {
             return response()->json(['message' => $e->getMessage() ?: 'Request failed.'], $e->getStatusCode());
         } catch (Throwable $e) {

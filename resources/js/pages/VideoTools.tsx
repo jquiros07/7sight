@@ -21,7 +21,7 @@ type VideoToolsSubject = {
 
 type VideoToolJob = {
     id: number;
-    type: 'trim' | 'resize';
+    type: 'trim' | 'resize' | 'thumbnail' | 'audio_extraction';
     status: 'pending' | 'processing' | 'completed' | 'failed';
     error_message: string | null;
 };
@@ -45,17 +45,6 @@ function useToolJobPolling(videoId: number, job: VideoToolJob | null, onUpdate: 
         return () => clearInterval(interval);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [videoId, job?.id, job?.status]);
-}
-
-function downloadBlob(blob: Blob, fileName: string) {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
 }
 
 function ToolJobStatus({ job, videoId }: { job: VideoToolJob; videoId: number }) {
@@ -94,12 +83,12 @@ export default function VideoTools() {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string[]>([]);
 
-    const [thumbnailGenerating, setThumbnailGenerating] = useState(false);
     const [thumbnailError, setThumbnailError] = useState<string[]>([]);
     const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+    const [thumbnailJob, setThumbnailJob] = useState<VideoToolJob | null>(null);
 
-    const [audioExtracting, setAudioExtracting] = useState(false);
     const [audioError, setAudioError] = useState<string[]>([]);
+    const [audioJob, setAudioJob] = useState<VideoToolJob | null>(null);
 
     const [trimStart, setTrimStart] = useState('');
     const [trimEnd, setTrimEnd] = useState('');
@@ -128,32 +117,34 @@ export default function VideoTools() {
 
     useToolJobPolling(video?.id ?? 0, trimJob, setTrimJob);
     useToolJobPolling(video?.id ?? 0, resizeJob, setResizeJob);
+    useToolJobPolling(video?.id ?? 0, thumbnailJob, (updated) => {
+        setThumbnailJob(updated);
+        if (updated.status === 'completed' && video) {
+            setThumbnailUrl(`/api/videos/${video.id}/thumbnail?t=${Date.now()}`);
+        }
+    });
+    useToolJobPolling(video?.id ?? 0, audioJob, setAudioJob);
 
     async function handleGenerateThumbnail() {
         if (!video) return;
-        setThumbnailGenerating(true);
         setThumbnailError([]);
+        setThumbnailUrl(null);
         try {
-            await api.post(`/api/videos/${video.id}/thumbnail`);
-            setThumbnailUrl(`/api/videos/${video.id}/thumbnail?t=${Date.now()}`);
+            const res = await api.post<VideoToolJob>(`/api/videos/${video.id}/thumbnail`);
+            setThumbnailJob(res.data);
         } catch (err) {
             setThumbnailError(getErrorMessages(err));
-        } finally {
-            setThumbnailGenerating(false);
         }
     }
 
     async function handleExtractAudio() {
         if (!video) return;
-        setAudioExtracting(true);
         setAudioError([]);
         try {
-            const res = await api.post(`/api/videos/${video.id}/extract-audio`, null, { responseType: 'blob' });
-            downloadBlob(res.data, `${video.title || 'video'}.mp3`);
+            const res = await api.post<VideoToolJob>(`/api/videos/${video.id}/extract-audio`);
+            setAudioJob(res.data);
         } catch (err) {
             setAudioError(getErrorMessages(err));
-        } finally {
-            setAudioExtracting(false);
         }
     }
 
@@ -258,7 +249,7 @@ export default function VideoTools() {
                                             <AlertDescription>{thumbnailError.join(' ')}</AlertDescription>
                                         </Alert>
                                     )}
-                                    {thumbnailUrl && (
+                                    {thumbnailUrl && thumbnailJob?.status === 'completed' && (
                                         <img
                                             src={thumbnailUrl}
                                             alt="Generated thumbnail"
@@ -266,11 +257,14 @@ export default function VideoTools() {
                                         />
                                     )}
                                     <div className="flex items-center gap-2">
-                                        <Button variant="secondary" onClick={handleGenerateThumbnail} disabled={thumbnailGenerating}>
-                                            {thumbnailGenerating && <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />}
-                                            {thumbnailGenerating ? 'Generating…' : 'Generate thumbnail'}
+                                        <Button
+                                            variant="secondary"
+                                            onClick={handleGenerateThumbnail}
+                                            disabled={thumbnailJob?.status === 'pending' || thumbnailJob?.status === 'processing'}
+                                        >
+                                            Generate thumbnail
                                         </Button>
-                                        {thumbnailUrl && (
+                                        {thumbnailUrl && thumbnailJob?.status === 'completed' && (
                                             <a
                                                 href={thumbnailUrl}
                                                 download={`${video.title || 'video'}-thumbnail.jpg`}
@@ -281,6 +275,9 @@ export default function VideoTools() {
                                             </a>
                                         )}
                                     </div>
+                                    {thumbnailJob && thumbnailJob.status !== 'completed' && (
+                                        <ToolJobStatus job={thumbnailJob} videoId={video.id} />
+                                    )}
                                 </CardContent>
                             </Card>
                         )}
@@ -299,10 +296,14 @@ export default function VideoTools() {
                                             <AlertDescription>{audioError.join(' ')}</AlertDescription>
                                         </Alert>
                                     )}
-                                    <Button variant="secondary" onClick={handleExtractAudio} disabled={audioExtracting}>
-                                        {audioExtracting && <Loader2 className="size-4 animate-spin" strokeWidth={1.75} />}
-                                        {audioExtracting ? 'Extracting…' : 'Extract audio'}
+                                    <Button
+                                        variant="secondary"
+                                        onClick={handleExtractAudio}
+                                        disabled={audioJob?.status === 'pending' || audioJob?.status === 'processing'}
+                                    >
+                                        Extract audio
                                     </Button>
+                                    {audioJob && <ToolJobStatus job={audioJob} videoId={video.id} />}
                                 </CardContent>
                             </Card>
                         )}

@@ -8,10 +8,10 @@ use App\Enums\VideoStatus;
 use App\Models\AnalysisJob;
 use App\Models\User;
 use App\Models\Video;
-use App\Models\VideoInsight;
 use App\Models\VideoToolJob;
 use App\Models\Workspace;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class ShowWorkspaceDashboard
 {
@@ -27,23 +27,44 @@ class ShowWorkspaceDashboard
      * Aggregate stats for a workspace's videos, analysis jobs, and generated
      * AI insights. Requires workspace membership.
      *
+     * Every number here comes from a targeted SQL query (COUNT/SUM/GROUP BY,
+     * and a ROW_NUMBER() window query for "latest insight per video") rather
+     * than loading every video/job/result/insight row into PHP and
+     * aggregating with collection methods. That previous approach scaled
+     * with total historical row count - which grows unbounded as videos get
+     * reprocessed and re-analyzed - instead of with the workspace's actual
+     * video count.
+     *
      * @return array<string, mixed>
      */
     public function __invoke(User $user, Workspace $workspace): array
     {
         $this->authorizeMembership($user, $workspace);
 
-        $videos = $workspace->videos()
-            ->select(['id', 'workspace_id', 'title', 'status', 'size', 'created_at'])
-            ->with([
-                'analysisJobs:id,video_id,type,status,started_at,completed_at,flagged_for_review_at,flagged_by,flagged_review_note',
-                'analysisJobs.results:id,analysis_job_id,label,occurrences',
-                'analysisJobs.flaggedByUser:id,name',
-                'insights:id,video_id,threat_assessment,moderation,ai_content_assessment,created_at',
-            ])
-            ->get();
-        $jobs = $videos->flatMap->analysisJobs;
+        $videoIds = Video::where('workspace_id', $workspace->id)->pluck('id');
         $insightSummary = $workspace->latestInsightSummary;
+
+        $videoStats = Video::where('workspace_id', $workspace->id)
+            ->selectRaw('COUNT(*) as total_videos, COALESCE(SUM(size), 0) as total_storage_bytes')
+            ->first();
+
+        $jobStats = AnalysisJob::whereIn('video_id', $videoIds)
+            ->selectRaw("
+                SUM(status = 'completed') as completed_analyses,
+                SUM(status IN ('pending', 'processing')) as processing_now,
+                SUM(status = 'failed') as failed_jobs,
+                SUM(flagged_for_review_at IS NOT NULL) as flagged_for_review,
+                AVG(CASE WHEN status = 'completed' AND started_at IS NOT NULL AND completed_at IS NOT NULL
+                    THEN {$this->secondsBetween('started_at', 'completed_at')} END) as avg_processing_seconds
+            ")
+            ->first();
+
+        // Each fetched once and reused below - risk/moderation breakdowns
+        // would otherwise re-run the same "latest per video" query insight_flags
+        // already made.
+        $threatRows = $this->latestNonNullInsightPerVideo($videoIds, 'threat_assessment');
+        $moderationRows = $this->latestNonNullInsightPerVideo($videoIds, 'moderation');
+        $aiContentRows = $this->latestNonNullInsightPerVideo($videoIds, 'ai_content_assessment');
 
         return [
             'workspace' => [
@@ -56,80 +77,96 @@ class ShowWorkspaceDashboard
                 'generated_at' => $insightSummary->created_at,
             ],
             'stats' => [
-                'total_videos' => $videos->count(),
-                'total_storage_bytes' => (int) $videos->sum('size'),
-                'completed_analyses' => $jobs->where('status', 'completed')->count(),
-                'processing_now' => $jobs->whereIn('status', ['pending', 'processing'])->count(),
-                'failed_jobs' => $jobs->where('status', 'failed')->count(),
-                'flagged_for_review' => $jobs->whereNotNull('flagged_for_review_at')->count(),
-                'avg_processing_seconds' => $this->avgProcessingSeconds($jobs),
-                'tool_jobs_run' => VideoToolJob::whereIn('video_id', $videos->pluck('id'))->count(),
+                'total_videos' => (int) $videoStats->total_videos,
+                'total_storage_bytes' => (int) $videoStats->total_storage_bytes,
+                'completed_analyses' => (int) $jobStats->completed_analyses,
+                'processing_now' => (int) $jobStats->processing_now,
+                'failed_jobs' => (int) $jobStats->failed_jobs,
+                'flagged_for_review' => (int) $jobStats->flagged_for_review,
+                'avg_processing_seconds' => $jobStats->avg_processing_seconds === null
+                    ? null
+                    : (int) round($jobStats->avg_processing_seconds),
+                'tool_jobs_run' => VideoToolJob::whereIn('video_id', $videoIds)->count(),
             ],
-            'uploads_over_time' => $this->uploadsOverTime($videos),
-            'videos_by_status' => $this->countsByValues(
-                $videos->countBy(fn (Video $video) => $video->status->value),
-                array_column(VideoStatus::cases(), 'value'),
-            ),
-            'jobs_by_type' => $this->countsByValues(
-                $jobs->countBy(fn (AnalysisJob $job) => $job->type->value),
-                [
-                    AnalysisType::ObjectDetection->value,
-                    AnalysisType::ThreatDetection->value,
-                    AnalysisType::ContentModeration->value,
-                    AnalysisType::TextDetection->value,
-                ],
-            ),
-            'top_labels' => $this->topLabels($jobs),
-            'insight_flags' => $this->insightFlags($videos),
-            'risk_level_breakdown' => $this->riskLevelBreakdown($videos),
-            'moderation_severity_breakdown' => $this->moderationSeverityBreakdown($videos),
-            'needs_review' => $this->needsReviewItems($videos, $jobs),
+            'uploads_over_time' => $this->uploadsOverTime($workspace),
+            'videos_by_status' => $this->videosByStatus($workspace),
+            'jobs_by_type' => $this->jobsByType($videoIds),
+            'top_labels' => $this->topLabels($videoIds),
+            'insight_flags' => $this->insightFlags($threatRows, $moderationRows, $aiContentRows),
+            'risk_level_breakdown' => $this->riskLevelBreakdown($threatRows),
+            'moderation_severity_breakdown' => $this->moderationSeverityBreakdown($moderationRows),
+            'needs_review' => $this->needsReviewItems($videoIds),
         ];
     }
 
     /**
-     * The most recently flagged analysis jobs in this workspace - results a
-     * human disputed as not matching what they saw in the video.
-     *
-     * @param  Collection<int, Video>  $videos
-     * @param  Collection<int, AnalysisJob>  $jobs
-     * @return array<int, array<string, mixed>>
+     * SQL fragment computing the number of seconds between two datetime
+     * columns. MySQL (dev/prod) and SQLite (the test suite's DB_CONNECTION,
+     * see phpunit.xml) don't share a date-diff function, so this is the one
+     * spot in this action that needs to branch by driver.
      */
-    private function needsReviewItems(Collection $videos, Collection $jobs): array
+    private function secondsBetween(string $start, string $end): string
     {
-        $videoTitles = $videos->pluck('title', 'id');
-
-        return $jobs
-            ->whereNotNull('flagged_for_review_at')
-            ->sortByDesc('flagged_for_review_at')
-            ->take(self::NEEDS_REVIEW_LIMIT)
-            ->map(fn (AnalysisJob $job) => [
-                'video_id' => $job->video_id,
-                'video_title' => $videoTitles[$job->video_id] ?? '',
-                'type' => $job->type->value,
-                'note' => $job->flagged_review_note,
-                'flagged_by' => $job->flaggedByUser?->name,
-                'flagged_at' => $job->flagged_for_review_at,
-            ])
-            ->values()
-            ->all();
+        return match (DB::connection()->getDriverName()) {
+            'sqlite' => "(strftime('%s', {$end}) - strftime('%s', {$start}))",
+            default => "TIMESTAMPDIFF(SECOND, {$start}, {$end})",
+        };
     }
 
     /**
-     * @param  Collection<int, Video>  $videos
      * @return array<int, array{date: string, count: int}>
      */
-    private function uploadsOverTime(Collection $videos): array
+    private function uploadsOverTime(Workspace $workspace): array
     {
-        $byDate = $videos->countBy(fn (Video $video) => $video->created_at->toDateString());
+        $windowStart = now()->subDays(self::UPLOADS_WINDOW_DAYS - 1)->startOfDay();
+
+        $byDate = Video::where('workspace_id', $workspace->id)
+            ->where('created_at', '>=', $windowStart)
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
+            ->groupBy('date')
+            ->pluck('count', 'date');
 
         return collect(range(self::UPLOADS_WINDOW_DAYS - 1, 0))
             ->map(function (int $daysAgo) use ($byDate) {
                 $date = now()->subDays($daysAgo)->toDateString();
 
-                return ['date' => $date, 'count' => $byDate->get($date, 0)];
+                return ['date' => $date, 'count' => (int) $byDate->get($date, 0)];
             })
             ->all();
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function videosByStatus(Workspace $workspace): array
+    {
+        $counts = Video::where('workspace_id', $workspace->id)
+            ->select('status')
+            ->selectRaw('COUNT(*) as count')
+            ->groupBy('status')
+            ->pluck('count', 'status');
+
+        return $this->countsByValues($counts, array_column(VideoStatus::cases(), 'value'));
+    }
+
+    /**
+     * @param  Collection<int, int>  $videoIds
+     * @return array<string, int>
+     */
+    private function jobsByType(Collection $videoIds): array
+    {
+        $counts = AnalysisJob::whereIn('video_id', $videoIds)
+            ->select('type')
+            ->selectRaw('COUNT(*) as count')
+            ->groupBy('type')
+            ->pluck('count', 'type');
+
+        return $this->countsByValues($counts, [
+            AnalysisType::ObjectDetection->value,
+            AnalysisType::ThreatDetection->value,
+            AnalysisType::ContentModeration->value,
+            AnalysisType::TextDetection->value,
+        ]);
     }
 
     /**
@@ -141,22 +178,93 @@ class ShowWorkspaceDashboard
      */
     private function countsByValues(Collection $counts, array $keys): array
     {
-        return collect($keys)->mapWithKeys(fn (string $key) => [$key => $counts->get($key, 0)])->all();
+        return collect($keys)->mapWithKeys(fn (string $key) => [$key => (int) $counts->get($key, 0)])->all();
     }
 
     /**
-     * @param  Collection<int, AnalysisJob>  $jobs
+     * @param  Collection<int, int>  $videoIds
      * @return array<int, array{label: string, occurrences: int}>
      */
-    private function topLabels(Collection $jobs): array
+    private function topLabels(Collection $videoIds): array
     {
-        return $jobs->flatMap->results
-            ->groupBy('label')
-            ->map(fn (Collection $results, string $label) => ['label' => $label, 'occurrences' => $results->sum('occurrences')])
-            ->sortByDesc('occurrences')
-            ->take(self::TOP_LABELS_LIMIT)
-            ->values()
+        if ($videoIds->isEmpty()) {
+            return [];
+        }
+
+        return DB::table('analysis_results')
+            ->join('analysis_jobs', 'analysis_jobs.id', '=', 'analysis_results.analysis_job_id')
+            ->whereIn('analysis_jobs.video_id', $videoIds)
+            ->select('analysis_results.label')
+            ->selectRaw('SUM(analysis_results.occurrences) as occurrences')
+            ->groupBy('analysis_results.label')
+            ->orderByDesc('occurrences')
+            ->limit(self::TOP_LABELS_LIMIT)
+            ->get()
+            ->map(fn ($row) => ['label' => $row->label, 'occurrences' => (int) $row->occurrences])
             ->all();
+    }
+
+    /**
+     * The most recently flagged analysis jobs in this workspace - results a
+     * human disputed as not matching what they saw in the video.
+     *
+     * @param  Collection<int, int>  $videoIds
+     * @return array<int, array<string, mixed>>
+     */
+    private function needsReviewItems(Collection $videoIds): array
+    {
+        if ($videoIds->isEmpty()) {
+            return [];
+        }
+
+        return AnalysisJob::whereIn('video_id', $videoIds)
+            ->whereNotNull('flagged_for_review_at')
+            ->with(['video:id,title', 'flaggedByUser:id,name'])
+            ->orderByDesc('flagged_for_review_at')
+            ->limit(self::NEEDS_REVIEW_LIMIT)
+            ->get()
+            ->map(fn (AnalysisJob $job) => [
+                'video_id' => $job->video_id,
+                'video_title' => $job->video->title ?? '',
+                'type' => $job->type->value,
+                'note' => $job->flagged_review_note,
+                'flagged_by' => $job->flaggedByUser?->name,
+                'flagged_at' => $job->flagged_for_review_at,
+            ])
+            ->all();
+    }
+
+    /**
+     * One row per video (among $videoIds) holding that video's most recent
+     * video_insights.$column value where the column isn't null, decoded from
+     * JSON. Uses ROW_NUMBER() so only one row per video round-trips from the
+     * database no matter how many insight rows that video has accumulated
+     * over time (repeated regenerations, retries, etc).
+     *
+     * @param  Collection<int, int>  $videoIds
+     * @return Collection<int, object{video_id: int, value: array<string, mixed>}>
+     */
+    private function latestNonNullInsightPerVideo(Collection $videoIds, string $column): Collection
+    {
+        if ($videoIds->isEmpty()) {
+            return collect();
+        }
+
+        $ranked = DB::table('video_insights')
+            ->select('video_id')
+            ->selectRaw("{$column} as value")
+            ->selectRaw('ROW_NUMBER() OVER (PARTITION BY video_id ORDER BY created_at DESC) as rn')
+            ->whereIn('video_id', $videoIds)
+            ->whereNotNull($column);
+
+        return DB::query()
+            ->fromSub($ranked, 'ranked')
+            ->where('rn', 1)
+            ->get()
+            ->map(fn ($row) => (object) [
+                'video_id' => $row->video_id,
+                'value' => json_decode($row->value, true),
+            ]);
     }
 
     /**
@@ -165,37 +273,17 @@ class ShowWorkspaceDashboard
      * kind null on the latest row, so each kind looks at its own latest
      * non-null value rather than only the single latest row.
      *
-     * @param  Collection<int, Video>  $videos
+     * @param  Collection<int, object{video_id: int, value: array<string, mixed>}>  $threatRows
+     * @param  Collection<int, object{video_id: int, value: array<string, mixed>}>  $moderationRows
+     * @param  Collection<int, object{video_id: int, value: array<string, mixed>}>  $aiContentRows
      * @return array{threats_detected: int, flagged_moderation: int, ai_generated_content_flagged: int}
      */
-    private function insightFlags(Collection $videos): array
+    private function insightFlags(Collection $threatRows, Collection $moderationRows, Collection $aiContentRows): array
     {
-        $threatsDetected = 0;
-        $flaggedModeration = 0;
-        $aiGeneratedContentFlagged = 0;
-
-        foreach ($videos as $video) {
-            $latestThreat = $video->insights->whereNotNull('threat_assessment')->sortByDesc('created_at')->first();
-            $latestModeration = $video->insights->whereNotNull('moderation')->sortByDesc('created_at')->first();
-            $latestAiContent = $video->insights->whereNotNull('ai_content_assessment')->sortByDesc('created_at')->first();
-
-            if ($latestThreat && ($latestThreat->threat_assessment['threat_detected'] ?? false)) {
-                $threatsDetected++;
-            }
-
-            if ($latestModeration && ($latestModeration->moderation['status'] ?? 'SAFE') !== 'SAFE') {
-                $flaggedModeration++;
-            }
-
-            if ($latestAiContent && ($latestAiContent->ai_content_assessment['verdict'] ?? null) === 'AI_GENERATED') {
-                $aiGeneratedContentFlagged++;
-            }
-        }
-
         return [
-            'threats_detected' => $threatsDetected,
-            'flagged_moderation' => $flaggedModeration,
-            'ai_generated_content_flagged' => $aiGeneratedContentFlagged,
+            'threats_detected' => $threatRows->filter(fn ($row) => $row->value['threat_detected'] ?? false)->count(),
+            'flagged_moderation' => $moderationRows->filter(fn ($row) => ($row->value['status'] ?? 'SAFE') !== 'SAFE')->count(),
+            'ai_generated_content_flagged' => $aiContentRows->filter(fn ($row) => ($row->value['verdict'] ?? null) === 'AI_GENERATED')->count(),
         ];
     }
 
@@ -204,15 +292,12 @@ class ShowWorkspaceDashboard
      * with no threat assessment generated yet are excluded entirely, same
      * "latest non-null value" rule as insightFlags().
      *
-     * @param  Collection<int, Video>  $videos
+     * @param  Collection<int, object{video_id: int, value: array<string, mixed>}>  $threatRows
      * @return array<string, int>
      */
-    private function riskLevelBreakdown(Collection $videos): array
+    private function riskLevelBreakdown(Collection $threatRows): array
     {
-        $counts = $videos
-            ->map(fn (Video $video) => $video->insights->whereNotNull('threat_assessment')->sortByDesc('created_at')->first())
-            ->filter()
-            ->countBy(fn (VideoInsight $insight) => $insight->threat_assessment['risk_level'] ?? null);
+        $counts = $threatRows->countBy(fn ($row) => $row->value['risk_level'] ?? null);
 
         return $this->countsByValues($counts, ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
     }
@@ -221,32 +306,13 @@ class ShowWorkspaceDashboard
      * Each video's latest moderation assessment, grouped by severity. Videos
      * with no moderation assessment generated yet are excluded entirely.
      *
-     * @param  Collection<int, Video>  $videos
+     * @param  Collection<int, object{video_id: int, value: array<string, mixed>}>  $moderationRows
      * @return array<string, int>
      */
-    private function moderationSeverityBreakdown(Collection $videos): array
+    private function moderationSeverityBreakdown(Collection $moderationRows): array
     {
-        $counts = $videos
-            ->map(fn (Video $video) => $video->insights->whereNotNull('moderation')->sortByDesc('created_at')->first())
-            ->filter()
-            ->countBy(fn (VideoInsight $insight) => $insight->moderation['severity'] ?? null);
+        $counts = $moderationRows->countBy(fn ($row) => $row->value['severity'] ?? null);
 
         return $this->countsByValues($counts, ['NONE', 'LOW', 'MEDIUM', 'HIGH']);
-    }
-
-    /**
-     * Average wall-clock time between a job starting and completing, across
-     * completed jobs that have both timestamps. Null when there's no data yet.
-     *
-     * @param  Collection<int, AnalysisJob>  $jobs
-     */
-    private function avgProcessingSeconds(Collection $jobs): ?int
-    {
-        $durations = $jobs
-            ->where('status', 'completed')
-            ->filter(fn (AnalysisJob $job) => $job->started_at && $job->completed_at)
-            ->map(fn (AnalysisJob $job) => $job->started_at->diffInSeconds($job->completed_at));
-
-        return $durations->isEmpty() ? null : (int) round($durations->avg());
     }
 }

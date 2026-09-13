@@ -3,39 +3,34 @@
 namespace App\Actions\Video;
 
 use App\Actions\Video\Concerns\AuthorizesVideoAccess;
+use App\Enums\VideoToolType;
+use App\Jobs\GenerateThumbnailJob;
 use App\Models\User;
 use App\Models\Video;
-use App\Support\FfmpegVideoProcessor;
-use Illuminate\Support\Facades\Storage;
+use App\Models\VideoToolJob;
 
 class GenerateVideoThumbnail
 {
     use AuthorizesVideoAccess;
 
-    public function __construct(
-        private readonly FfmpegVideoProcessor $processor,
-    ) {}
-
     /**
-     * Extract a frame near the start of the video and store it as the
-     * video's thumbnail. Requires being the uploader or having
-     * 'videos.generate-thumbnail' in the video's workspace.
+     * Queue a thumbnail extraction for the video. Requires being the
+     * uploader or having 'videos.generate-thumbnail' in the video's
+     * workspace.
      */
-    public function __invoke(User $user, Video $video): Video
+    public function __invoke(User $user, Video $video): VideoToolJob
     {
         $this->authorizeVideoManagement($user, $video, 'videos.generate-thumbnail');
 
-        $path = "videos/{$video->workspace_id}/{$video->user_id}/derived/{$video->id}/thumbnail.jpg";
+        $job = VideoToolJob::create([
+            'video_id' => $video->id,
+            'user_id' => $user->id,
+            'type' => VideoToolType::Thumbnail,
+            'status' => 'pending',
+        ]);
 
-        $disk = Storage::disk($video->disk);
-        $disk->makeDirectory(dirname($path));
+        GenerateThumbnailJob::dispatch($job);
 
-        $atSecond = $video->duration_seconds > 1 ? 1.0 : 0.0;
-
-        $this->processor->thumbnail($disk->path($video->path), $disk->path($path), $atSecond);
-
-        $video->update(['thumbnail_path' => $path]);
-
-        return $video;
+        return $job;
     }
 }

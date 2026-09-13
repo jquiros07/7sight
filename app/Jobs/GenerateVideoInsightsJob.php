@@ -3,6 +3,8 @@
 namespace App\Jobs;
 
 use App\Actions\Video\GenerateVideoInsights;
+use App\Enums\AnalysisType;
+use App\Models\User;
 use App\Models\Video;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -13,8 +15,19 @@ class GenerateVideoInsightsJob implements ShouldQueue
 {
     use Queueable;
 
+    /**
+     * @param  User|null  $user  The user to generate insights as. Defaults to
+     *                           the video's uploader when triggered
+     *                           internally (e.g. after analysis completes)
+     *                           rather than by a specific requesting user.
+     * @param  AnalysisType|null  $type  Limit generation to one analysis
+     *                                   type, or null to (re)generate all of
+     *                                   them.
+     */
     public function __construct(
         public Video $video,
+        public ?User $user = null,
+        public ?AnalysisType $type = null,
     ) {}
 
     /**
@@ -36,7 +49,7 @@ class GenerateVideoInsightsJob implements ShouldQueue
         Log::info('GenerateVideoInsightsJob started', ['video_id' => $this->video->id]);
 
         try {
-            $generateVideoInsights($this->video->uploader, $this->video);
+            $generateVideoInsights($this->user ?? $this->video->uploader, $this->video, $this->type);
             Log::info('GenerateVideoInsightsJob finished', ['video_id' => $this->video->id]);
         } catch (Throwable $e) {
             Log::error($e->getMessage(), ['exception' => $e, 'video_id' => $this->video->id]);

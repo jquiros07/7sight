@@ -3,12 +3,12 @@
 namespace Tests\Feature\Actions\Video;
 
 use App\Actions\Video\GenerateVideoThumbnail;
+use App\Jobs\GenerateThumbnailJob;
 use App\Models\User;
 use App\Models\Video;
 use App\Models\Workspace;
-use App\Support\FfmpegVideoProcessor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Queue;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
@@ -16,12 +16,9 @@ class GenerateVideoThumbnailTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_the_uploader_can_generate_a_thumbnail_for_their_own_video(): void
+    public function test_the_uploader_can_queue_a_thumbnail_for_their_own_video(): void
     {
-        Storage::fake('local');
-        $this->mock(FfmpegVideoProcessor::class, function ($mock) {
-            $mock->shouldReceive('thumbnail')->once();
-        });
+        Queue::fake();
 
         $workspace = Workspace::factory()->create();
         $uploader = User::factory()->create();
@@ -32,21 +29,16 @@ class GenerateVideoThumbnailTest extends TestCase
             'duration_seconds' => 30,
         ]);
 
-        $result = (app(GenerateVideoThumbnail::class))($uploader, $video);
+        $job = (app(GenerateVideoThumbnail::class))($uploader, $video);
 
-        $this->assertNotNull($result->thumbnail_path);
-        $this->assertSame(
-            "videos/{$workspace->id}/{$uploader->id}/derived/{$video->id}/thumbnail.jpg",
-            $result->thumbnail_path
-        );
+        $this->assertSame('pending', $job->status);
+        $this->assertSame($video->id, $job->video_id);
+        Queue::assertPushed(GenerateThumbnailJob::class, fn (GenerateThumbnailJob $pushed) => $pushed->videoToolJob->is($job));
     }
 
-    public function test_an_outsider_cannot_generate_a_thumbnail(): void
+    public function test_an_outsider_cannot_queue_a_thumbnail(): void
     {
-        Storage::fake('local');
-        $this->mock(FfmpegVideoProcessor::class, function ($mock) {
-            $mock->shouldNotReceive('thumbnail');
-        });
+        Queue::fake();
 
         $workspace = Workspace::factory()->create();
         $uploader = User::factory()->create();
@@ -61,6 +53,6 @@ class GenerateVideoThumbnailTest extends TestCase
             $this->assertSame(403, $e->getStatusCode());
         }
 
-        $this->assertNull($video->fresh()->thumbnail_path);
+        Queue::assertNotPushed(GenerateThumbnailJob::class);
     }
 }

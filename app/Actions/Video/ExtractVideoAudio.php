@@ -3,38 +3,33 @@
 namespace App\Actions\Video;
 
 use App\Actions\Video\Concerns\AuthorizesVideoAccess;
+use App\Enums\VideoToolType;
+use App\Jobs\ExtractAudioJob;
 use App\Models\User;
 use App\Models\Video;
-use App\Support\FfmpegVideoProcessor;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use App\Models\VideoToolJob;
 
 class ExtractVideoAudio
 {
     use AuthorizesVideoAccess;
 
-    public function __construct(
-        private readonly FfmpegVideoProcessor $processor,
-    ) {}
-
     /**
-     * Extract the video's audio track and return it as a download. Nothing
-     * is persisted - the output is a temp file deleted once sent. Requires
-     * being the uploader or having 'videos.extract-audio' in the video's
-     * workspace.
+     * Queue an audio track extraction for the video. Requires being the
+     * uploader or having 'videos.extract-audio' in the video's workspace.
      */
-    public function __invoke(User $user, Video $video): BinaryFileResponse
+    public function __invoke(User $user, Video $video): VideoToolJob
     {
         $this->authorizeVideoManagement($user, $video, 'videos.extract-audio');
 
-        $inputPath = Storage::disk($video->disk)->path($video->path);
-        $outputPath = tempnam(sys_get_temp_dir(), 'video-audio-').'.mp3';
+        $job = VideoToolJob::create([
+            'video_id' => $video->id,
+            'user_id' => $user->id,
+            'type' => VideoToolType::AudioExtraction,
+            'status' => 'pending',
+        ]);
 
-        $this->processor->extractAudio($inputPath, $outputPath);
+        ExtractAudioJob::dispatch($job);
 
-        $fileName = Str::slug($video->title ?: 'video').'.mp3';
-
-        return response()->download($outputPath, $fileName)->deleteFileAfterSend();
+        return $job;
     }
 }

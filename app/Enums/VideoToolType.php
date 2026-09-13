@@ -6,4 +6,6 @@ enum VideoToolType: string
 {
     case Trim = 'trim';
     case Resize = 'resize';
+    case Thumbnail = 'thumbnail';
+    case AudioExtraction = 'audio_extraction';
 }

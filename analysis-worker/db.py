@@ -84,8 +84,11 @@ def mark_failed(conn, job_id):
 
 
 def save_results(conn, job_id, rows):
-    """rows: aggregate.aggregate_detections() output."""
+    """rows: aggregate.aggregate_detections() output. Deletes any rows already
+    saved for this job first so a retry (of this same attempt loop) replaces a
+    prior partial/failed attempt's rows instead of colliding with them."""
     with conn.cursor() as cursor:
+        cursor.execute("DELETE FROM analysis_results WHERE analysis_job_id = %s", (job_id,))
         for row in rows:
             cursor.execute(
                 """

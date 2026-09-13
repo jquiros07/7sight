@@ -37,39 +37,19 @@ class GenerateVideoInsights
      */
     public function __invoke(User $user, Video $video, ?AnalysisType $type = null): array
     {
-        $this->authorizePermission($user, $video->workspace, 'videos.generate-insights');
+        [
+            'jobs' => $jobs,
+            'threatJob' => $threatJob,
+            'moderationJob' => $moderationJob,
+            'textDetectionJob' => $textDetectionJob,
+            'objectDetectionJobs' => $objectDetectionJobs,
+            'wantsObjectDetection' => $wantsObjectDetection,
+            'wantsThreatAssessment' => $wantsThreatAssessment,
+            'wantsModeration' => $wantsModeration,
+            'wantsTextDetection' => $wantsTextDetection,
+        ] = $this->assertCanGenerate($user, $video, $type);
 
         Log::info('Generating video insights', ['video_id' => $video->id, 'type' => $type?->value ?? 'all']);
-
-        $video->loadMissing('analysisJobs.results', 'latestInsight');
-
-        $jobs = $this->latestCompletedJobsByType($video);
-
-        abort_if($jobs->isEmpty(), 422, 'This video has no completed analysis to generate insights from.');
-
-        $threatJob = $jobs->first(fn (AnalysisJob $job) => $job->type === AnalysisType::ThreatDetection);
-        $moderationJob = $jobs->first(fn (AnalysisJob $job) => $job->type === AnalysisType::ContentModeration);
-        $textDetectionJob = $jobs->first(fn (AnalysisJob $job) => $job->type === AnalysisType::TextDetection);
-        $objectDetectionJobs = $jobs->filter(fn (AnalysisJob $job) => $job->type === AnalysisType::ObjectDetection);
-
-        $wantsObjectDetection = in_array($type, [null, AnalysisType::ObjectDetection], true);
-        $wantsThreatAssessment = in_array($type, [null, AnalysisType::ThreatDetection], true);
-        $wantsModeration = in_array($type, [null, AnalysisType::ContentModeration], true);
-        $wantsTextDetection = in_array($type, [null, AnalysisType::TextDetection], true);
-
-        match ($type) {
-            AnalysisType::ObjectDetection => abort_if($objectDetectionJobs->isEmpty(), 422, 'This video has no completed object detection analysis to generate insights from.'),
-            AnalysisType::ThreatDetection => abort_if($threatJob === null, 422, 'This video has no completed threat detection analysis to generate insights from.'),
-            AnalysisType::ContentModeration => abort_if($moderationJob === null, 422, 'This video has no completed content moderation analysis to generate insights from.'),
-            AnalysisType::TextDetection => abort_if($textDetectionJob === null, 422, 'This video has no completed text detection analysis to generate insights from.'),
-            default => null,
-        };
-
-        abort_if(
-            $this->alreadyUpToDate($video, $jobs, $wantsObjectDetection, $wantsThreatAssessment, $wantsModeration, $wantsTextDetection),
-            422,
-            'Insights for this video are already up to date.'
-        );
 
         $result = [
             'object_detection' => (! $wantsObjectDetection || $objectDetectionJobs->isEmpty()) ? null : $this->promptForInsights(
@@ -119,6 +99,67 @@ class GenerateVideoInsights
         ]);
 
         return $result;
+    }
+
+    /**
+     * Every check needed before actually prompting the AI: authorization,
+     * that completed analysis exists for what's being requested, and that
+     * the latest insight isn't already up to date. Public so a caller
+     * queuing generation as a background job (RequestVideoInsights) can run
+     * these synchronously first and give an instant, specific 403/422
+     * instead of the request failing later as a generic background job
+     * failure with no useful message.
+     *
+     * @return array{
+     *     jobs: Collection<int, AnalysisJob>,
+     *     threatJob: ?AnalysisJob,
+     *     moderationJob: ?AnalysisJob,
+     *     textDetectionJob: ?AnalysisJob,
+     *     objectDetectionJobs: Collection<int, AnalysisJob>,
+     *     wantsObjectDetection: bool,
+     *     wantsThreatAssessment: bool,
+     *     wantsModeration: bool,
+     *     wantsTextDetection: bool,
+     * }
+     */
+    public function assertCanGenerate(User $user, Video $video, ?AnalysisType $type = null): array
+    {
+        $this->authorizePermission($user, $video->workspace, 'videos.generate-insights');
+
+        $video->loadMissing('analysisJobs.results', 'latestInsight');
+
+        $jobs = $this->latestCompletedJobsByType($video);
+
+        abort_if($jobs->isEmpty(), 422, 'This video has no completed analysis to generate insights from.');
+
+        $threatJob = $jobs->first(fn (AnalysisJob $job) => $job->type === AnalysisType::ThreatDetection);
+        $moderationJob = $jobs->first(fn (AnalysisJob $job) => $job->type === AnalysisType::ContentModeration);
+        $textDetectionJob = $jobs->first(fn (AnalysisJob $job) => $job->type === AnalysisType::TextDetection);
+        $objectDetectionJobs = $jobs->filter(fn (AnalysisJob $job) => $job->type === AnalysisType::ObjectDetection);
+
+        $wantsObjectDetection = in_array($type, [null, AnalysisType::ObjectDetection], true);
+        $wantsThreatAssessment = in_array($type, [null, AnalysisType::ThreatDetection], true);
+        $wantsModeration = in_array($type, [null, AnalysisType::ContentModeration], true);
+        $wantsTextDetection = in_array($type, [null, AnalysisType::TextDetection], true);
+
+        match ($type) {
+            AnalysisType::ObjectDetection => abort_if($objectDetectionJobs->isEmpty(), 422, 'This video has no completed object detection analysis to generate insights from.'),
+            AnalysisType::ThreatDetection => abort_if($threatJob === null, 422, 'This video has no completed threat detection analysis to generate insights from.'),
+            AnalysisType::ContentModeration => abort_if($moderationJob === null, 422, 'This video has no completed content moderation analysis to generate insights from.'),
+            AnalysisType::TextDetection => abort_if($textDetectionJob === null, 422, 'This video has no completed text detection analysis to generate insights from.'),
+            default => null,
+        };
+
+        abort_if(
+            $this->alreadyUpToDate($video, $jobs, $wantsObjectDetection, $wantsThreatAssessment, $wantsModeration, $wantsTextDetection),
+            422,
+            'Insights for this video are already up to date.'
+        );
+
+        return compact(
+            'jobs', 'threatJob', 'moderationJob', 'textDetectionJob', 'objectDetectionJobs',
+            'wantsObjectDetection', 'wantsThreatAssessment', 'wantsModeration', 'wantsTextDetection',
+        );
     }
 
     /**

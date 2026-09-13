@@ -683,14 +683,14 @@ function InsightsCard({
     failedAt,
     canRetry,
     onSeek,
-    onRetried,
+    onQueued,
 }: {
     videoId: number;
     insights: VideoInsightsResponse | null;
     failedAt: string | null;
     canRetry: boolean;
     onSeek: (seconds: number) => void;
-    onRetried: (insights: VideoInsightsResponse) => void;
+    onQueued: () => void;
 }) {
     const [retrying, setRetrying] = useState(false);
     const [retryError, setRetryError] = useState<string[]>([]);
@@ -699,8 +699,8 @@ function InsightsCard({
         setRetrying(true);
         setRetryError([]);
         try {
-            const res = await api.post<VideoInsightsResponse>(`/api/videos/${videoId}/insights`);
-            onRetried(res.data);
+            await api.post(`/api/videos/${videoId}/insights`);
+            onQueued();
         } catch (err) {
             setRetryError(getErrorMessages(err));
         } finally {
@@ -1366,7 +1366,7 @@ export default function VideoResults() {
                                     failedAt={video.insights_failed_at}
                                     canRetry={can(video.workspace_id, 'videos.generate-insights')}
                                     onSeek={seekTo}
-                                    onRetried={setInsights}
+                                    onQueued={() => setVideo((current) => (current ? { ...current, insights_failed_at: null } : current))}
                                 />
                                 <InquireCard
                                     videoId={video.id}
