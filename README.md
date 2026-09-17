@@ -248,6 +248,10 @@ attempts, error messages) queryable without a separate dashboard.
 - Caddy — reverse proxy and automatic HTTPS in production
 - See [`DEPLOYMENT.md`](DEPLOYMENT.md) for taking this to a live server
 
+## Overview
+
+![7Sight](7s.jpg)
+
 ## Configuration
 
 Copy `.env.example` to `.env` and fill in:
